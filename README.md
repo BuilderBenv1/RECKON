@@ -63,7 +63,7 @@ data/          synthetic workbook, emails and reconciliation fixture
 
 1. Create a sandbox account at sandbox.airwallex.com, then go to **Account > Developer > API keys**.
 2. Copy `.env.example` to `.env` and add the keys. Never commit `.env`.
-3. Run `npm run sandbox:smoke`. It exercises every call Reckon makes, one step at a time, and prints the exact API error for any that fail. Field names marked `VERIFY` in `src/airwallex/rest.ts` are the ones to check against the Airwallex docs MCP.
+3. Run `npm run sandbox:smoke`. It exercises every call Reckon makes, one step at a time, and prints the exact API error for any that fail. Field names were checked against the Airwallex API reference; the smoke test confirms them against your sandbox.
 
 All data is synthetic. No real business, customer or supplier appears anywhere in this repo.
 

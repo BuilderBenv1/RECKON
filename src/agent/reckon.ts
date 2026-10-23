@@ -169,7 +169,7 @@ export class Reckon {
     this.ledger.updateAttempt(requestId, { details: { supplier: p.supplier, beneficiaryId, amount: p.amount, currency: p.currency, method: p.method, reference } });
     let t: TransferView;
     try {
-      t = await this.awx.createTransfer({ requestId, beneficiaryId, amount: p.amount, currency: p.currency, method: p.method, reference });
+      t = await this.awx.createTransfer({ requestId, beneficiaryId, amount: p.amount, currency: p.currency, method: p.method, reference, reason: payee.reason });
     } catch (err) {
       // Ambiguous failure: look the request up before anything else, so a retry can't pay twice.
       const found = await this.awx.findTransferByRequestId(requestId);

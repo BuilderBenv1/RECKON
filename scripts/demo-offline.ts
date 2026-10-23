@@ -109,7 +109,7 @@ console.log(`Cash ${fmt(final.summary.cashUSD, 'USD')} vs floor ${fmt(final.summ
 
 // ---- 7. never pay twice ---------------------------------------------------------------------------
 h('7. Supplier chases last week\'s instalment');
-await awx.transitionTransfer(prior.id, 'FAILED', 'BENEFICIARY_ACCOUNT_CLOSED');
+await awx.transitionTransfer(prior.id, 'FAILED', 'ACCOUNT_CLOSED');
 await reckon.ingestEmail(await email('03-brightline-not-received.json'));
 const incident = await reckon.handleNotReceived('PAY-109-SUB-I2');
 console.log('Outcome:', incident.outcome, incident.outcome === 'replaced' ? `${incident.original.id} -> ${incident.replacement.id}` : '');

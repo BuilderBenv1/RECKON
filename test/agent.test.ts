@@ -79,7 +79,7 @@ describe('never pay twice', () => {
     const p = seedBook.payables.find((x) => x.id === 'PAY-109-SUB')!;
     const t = await reckon.pay(p);
     await awx.transitionTransfer(t.id, 'SENT');
-    await awx.transitionTransfer(t.id, 'FAILED', 'BENEFICIARY_ACCOUNT_CLOSED');
+    await awx.transitionTransfer(t.id, 'FAILED', 'ACCOUNT_CLOSED');
     const outcome = await reckon.handleNotReceived('PAY-109-SUB');
     expect(outcome.outcome).toBe('replaced');
     const [orig, repl] = reckon.paymentAttempts();

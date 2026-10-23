@@ -47,6 +47,7 @@ export interface AirwallexPort {
     currency: Currency;
     method: TransferMethod;
     reference: string;
+    reason: string;
   }): Promise<TransferView>;
   getTransfer(id: string): Promise<TransferView>;
   /** Find a transfer by our request id, used before any retry so a retry can never pay twice. */

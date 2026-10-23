@@ -3,8 +3,8 @@ import type { PayeeDetails } from '../domain/payees.js';
 import type { AirwallexPort, FxQuote, PaymentLinkView, SandboxSimulator, TransferStatus, TransferView } from './port.js';
 
 // REST client for the Airwallex sandbox, written from the hackathon builder guide.
-// Lines marked VERIFY are field names the guide does not spell out; confirm them with the
-// Airwallex docs MCP (https://mcp.sandbox.airwallex.com/docs) and `npm run sandbox:smoke`.
+// Field names checked against the Airwallex API reference on 23 Oct 2026 (links per method).
+// `npm run sandbox:smoke` confirms them against a live sandbox.
 //
 // Conventions from the guide:
 // - Base URL https://api.sandbox.airwallex.com, paths under /api/v1
@@ -68,17 +68,18 @@ export class AirwallexRest implements AirwallexPort, SandboxSimulator {
   }
 
   async quote(sell: Currency, buy: Currency, buyAmount: number): Promise<FxQuote> {
-    // VERIFY: quote request/response field names (validity window, client_rate location).
+    // https://www.airwallex.com/docs/api/transactional_fx/quotes/create (buy_amount is a number here)
     const q = await this.call<{ quote_id: string; client_rate: number }>('POST', '/fx/quotes/create', {
       sell_currency: sell,
       buy_currency: buy,
-      buy_amount: buyAmount.toFixed(2),
+      buy_amount: Math.round(buyAmount * 100) / 100,
       validity: 'MIN_1',
     });
     return { quoteId: q.quote_id, sellCurrency: sell, buyCurrency: buy, buyAmount, clientRate: q.client_rate };
   }
 
   async convert({ requestId, quote }: { requestId: string; quote: FxQuote }) {
+    // https://www.airwallex.com/docs/api/transactional_fx/conversion/create (buy_amount is a string here)
     const c = await this.call<{ conversion_id?: string; id?: string; status: string }>('POST', '/fx/conversions/create', {
       request_id: requestId,
       buy_currency: quote.buyCurrency,
@@ -96,9 +97,8 @@ export class AirwallexRest implements AirwallexPort, SandboxSimulator {
         : payee.bank.kind === 'GB'
           ? { account_name: payee.supplier, account_currency: 'GBP', bank_country_code: 'GB', account_number: payee.bank.account_number, account_routing_type1: 'sort_code', account_routing_value1: payee.bank.sort_code, bank_name: payee.bank.bank_name }
           : { account_name: payee.supplier, account_currency: 'EUR', bank_country_code: 'DE', iban: payee.bank.iban, swift_code: payee.bank.swift_code };
-    // VERIFY: beneficiary envelope (entity_type, company_name) against POST /beneficiaries/schema.
+    // https://www.airwallex.com/docs/api/payouts/beneficiaries/create (no request_id; id returned top-level)
     const b = await this.call<{ id?: string; beneficiary_id?: string }>('POST', '/beneficiaries/create', {
-      request_id: crypto.randomUUID(),
       nickname: payee.supplier,
       beneficiary: {
         entity_type: 'COMPANY',
@@ -112,8 +112,9 @@ export class AirwallexRest implements AirwallexPort, SandboxSimulator {
   }
 
   async createTransfer(args: Parameters<AirwallexPort['createTransfer']>[0]): Promise<TransferView> {
+    // https://www.airwallex.com/docs/api/payouts/transfers/create
     // Guide: send transfer_currency and transfer_amount (payment_currency returns code 001).
-    // VERIFY: whether `reason` and `source_currency` are required on this account.
+    // `reason` is a closed list (freight, construction, goods_purchased, technical_services, ...).
     const t = await this.call<RawTransfer>('POST', '/transfers/create', {
       request_id: args.requestId,
       beneficiary_id: args.beneficiaryId,
@@ -122,7 +123,7 @@ export class AirwallexRest implements AirwallexPort, SandboxSimulator {
       source_currency: args.currency,
       transfer_method: args.method,
       reference: args.reference.slice(0, 35),
-      reason: 'payment_to_supplier',
+      reason: args.reason,
     });
     return toView(t);
   }
@@ -132,7 +133,7 @@ export class AirwallexRest implements AirwallexPort, SandboxSimulator {
   }
 
   async findTransferByRequestId(requestId: string): Promise<TransferView | null> {
-    // VERIFY: list filter name; falls back to scanning the first page.
+    // https://www.airwallex.com/docs/api/payouts/transfers/list (request_id is a query parameter)
     const page = await this.call<{ items: RawTransfer[] }>('GET', `/transfers?request_id=${encodeURIComponent(requestId)}`);
     const hit = page.items?.find((t) => t.request_id === requestId);
     return hit ? toView(hit) : null;
@@ -140,8 +141,9 @@ export class AirwallexRest implements AirwallexPort, SandboxSimulator {
 
   async createPaymentLink(args: { title: string; amount: number; currency: Currency; reference: string }): Promise<PaymentLinkView> {
     const l = await this.call<{ id: string; url: string; status: 'UNPAID' | 'PAID' }>('POST', '/pa/payment_links/create', {
+      // https://www.airwallex.com/docs/api/payments/payment_links/create (amount is a number)
       title: args.title,
-      amount: args.amount.toFixed(2),
+      amount: Math.round(args.amount * 100) / 100,
       currency: args.currency,
       reusable: false,
       reference: args.reference,
@@ -150,7 +152,7 @@ export class AirwallexRest implements AirwallexPort, SandboxSimulator {
   }
 
   async notifyShopper(linkId: string, email: string): Promise<void> {
-    // VERIFY: body field name for the shopper's email.
+    // https://www.airwallex.com/docs/api/payments/payment_links/notify_shopper
     await this.call('POST', `/pa/payment_links/${linkId}/notify_shopper`, { shopper_email: email });
   }
 
@@ -163,16 +165,35 @@ export class AirwallexRest implements AirwallexPort, SandboxSimulator {
 
   async deposit(amount: number, currency: Currency, payerName: string): Promise<void> {
     // The deposit lands in the Global Account's currency; pick an account in `currency`.
-    const accounts = await this.call<{ items: { id: string; required_features?: { currency: string }[] }[] }>('GET', '/global_accounts');
-    const acct = accounts.items.find((a) => a.required_features?.some((f) => f.currency === currency)) ?? accounts.items[0];
-    if (!acct) throw new Error('No Global Account in the sandbox; create one first (see README).');
+    const acct = await this.globalAccount(currency);
+    if (!acct) throw new Error(`No active ${currency} Global Account in the sandbox; run npm run sandbox:smoke to create one.`);
     await this.call('POST', '/simulation/deposit/create', { global_account_id: acct.id, amount, payer_name: payerName });
   }
 
   async transitionTransfer(id: string, next: 'SENT' | 'PAID' | 'FAILED', failureType?: string): Promise<void> {
-    // Guide: simulate SENT before PAID; failure_type only applies after SENT.
-    // VERIFY: body field names for the target status and failure type.
+    // https://www.airwallex.com/docs/api/simulation/transfers
+    // Guide: simulate SENT before PAID. failure_type values include ACCOUNT_CLOSED,
+    // BENEFICIARY_BANK_RETURNED, INVALID_ACCOUNT_NAME_OR_NUMBER, RECALL_REQUESTED.
     await this.call('POST', `/simulation/transfers/${id}/transition`, failureType ? { next_status: next, failure_type: failureType } : { next_status: next });
+  }
+
+  /** First ACTIVE Global Account holding `currency`, or null. */
+  async globalAccount(currency: Currency): Promise<{ id: string } | null> {
+    // https://www.airwallex.com/docs/api/core_resources/global_accounts/list
+    type Acct = { id: string; status: string; required_features?: { currency: string }[]; supported_features?: { currency: string }[] };
+    const page = await this.call<{ items: Acct[] }>('GET', '/global_accounts');
+    const has = (a: Acct) => [...(a.required_features ?? []), ...(a.supported_features ?? [])].some((f) => f.currency === currency);
+    return page.items?.find((a) => a.status === 'ACTIVE' && has(a)) ?? null;
+  }
+
+  /** Creates a LOCAL Global Account. country_code is the account country, not the currency. */
+  async createGlobalAccount(currency: Currency): Promise<{ id: string }> {
+    const country = { USD: 'US', EUR: 'NL', GBP: 'GB' }[currency];
+    return this.call<{ id: string }>('POST', '/global_accounts/create', {
+      request_id: crypto.randomUUID(),
+      country_code: country,
+      required_features: [{ currency, transfer_method: 'LOCAL' }],
+    });
   }
 
   async payLink(): Promise<void> {
@@ -189,6 +210,8 @@ interface RawTransfer {
   reference: string;
   failure_type?: string;
   failure_reason?: string;
+  /** Where the API reference puts failure details. */
+  failure?: { code?: string; message?: string; details?: { type?: string } };
 }
 
 function toView(t: RawTransfer): TransferView {
@@ -200,8 +223,10 @@ function toView(t: RawTransfer): TransferView {
     currency: t.transfer_currency,
     reference: t.reference,
   };
-  if (t.failure_type) v.failureType = t.failure_type;
-  if (t.failure_reason) v.failureReason = t.failure_reason;
+  const failureType = t.failure?.details?.type ?? t.failure_type;
+  const failureReason = t.failure?.message ?? t.failure_reason;
+  if (failureType) v.failureType = failureType;
+  if (failureReason) v.failureReason = failureReason;
   return v;
 }
 

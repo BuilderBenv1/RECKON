@@ -19,11 +19,11 @@ Needs: working demo, video under 5 minutes, this repo with setup instructions.
 - **Synthetic data only.** No real client, customer or supplier names or figures anywhere in the repo, the video or the README. The origin story is "a UK project-based business", unnamed.
 - **Never commit keys.** `.env` is gitignored; use `.env.example` for new variables.
 - Airwallex conventions from the builder guide: amounts in major units; failed transfers end CANCELLED (read `failure_type`); simulate SENT before FAILED; SWIFT costs EUR 12.85 per payout; FX quotes are single-use; no `x-api-version` on FX calls; FX conversions are REST-only; bearer token lasts 30 minutes.
-- Field names marked `VERIFY` in `src/airwallex/rest.ts` are unconfirmed. Check them with the Airwallex docs MCP (`claude mcp add-json airwallex-docs '{ "type": "http", "url": "https://mcp.sandbox.airwallex.com/docs" }'`) and `npm run sandbox:smoke` before relying on them.
+- Airwallex field names in `src/airwallex/rest.ts` were checked against the API reference (linked per method) on 23 Oct 2026. `npm run sandbox:smoke` confirms them live. Transfer `reason` is a closed list; simulated `failure_type` values include ACCOUNT_CLOSED (not BENEFICIARY_ACCOUNT_CLOSED).
 
 ## Next up
 
-- Run `sandbox:smoke` with real keys and fix the VERIFY fields
+- Run `sandbox:smoke` with real keys
 - `scripts/demo-live.ts`: the same story as `demo-offline.ts` against `AirwallexRest`
 - Webhook receiver for `payment_intent.succeeded` and `payout.transfer.*` (verify HMAC on the raw body, dedupe on event id)
 - MD brief and approval page (Next.js), plan diff view, replay button
