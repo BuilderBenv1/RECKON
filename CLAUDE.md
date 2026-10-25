@@ -26,7 +26,7 @@ Needs: working demo, video under 5 minutes, this repo with setup instructions.
 
 ## Next up
 
-- First full `demo:live` run on the real sandbox
+- (done 25 Oct 2026) First full `demo:live` run: all 9 steps passed on the real sandbox with Claude reading the emails
 - Webhook receiver for `payment_intent.succeeded` and `payout.transfer.*` (verify HMAC on the raw body, dedupe on event id)
 - MD brief and approval page (Next.js), plan diff view, replay button
 - Supabase persistence for the ledger
