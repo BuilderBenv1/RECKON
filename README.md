@@ -64,6 +64,11 @@ data/          synthetic workbook, emails and reconciliation fixture
 1. Create a sandbox account at sandbox.airwallex.com, then go to **Account > Developer > API keys**.
 2. Copy `.env.example` to `.env` and add the keys. Never commit `.env`.
 3. Run `npm run sandbox:smoke`. It exercises every call Reckon makes, one step at a time, and prints the exact API error for any that fail. Field names were checked against the Airwallex API reference; the smoke test confirms them against your sandbox.
+4. Run `npm run demo:live` for the whole story against the sandbox. Every conversion, beneficiary, transfer, simulated failure and payment link is a real sandbox call. Midway, the customer's early-pay link opens in your browser: pay it with test card 4035501000000008 (any future expiry, any CVC) and the story carries on.
+
+A new sandbox starts with millions in every currency, so a real cash gap would never appear. The live run plans from the business's own operating balance instead: every call goes to Airwallex, and an operating envelope moves the story-sized balance with each real conversion, transfer, cancellation, deposit and paid link.
+
+Use a **scoped API key** with read and write on Core Resources, Simulations, Payment Acceptance, Payouts and Transactional FX. Admin keys are disabled on new sandbox accounts.
 
 All data is synthetic. No real business, customer or supplier appears anywhere in this repo.
 

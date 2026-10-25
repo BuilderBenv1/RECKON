@@ -4,8 +4,13 @@ import type { PayeeDetails } from '../domain/payees.js';
 // Everything Reckon needs from Airwallex, behind one interface. The planner never sees this;
 // the agent calls it only to carry out decisions the policy engine has already allowed.
 
-/** Airwallex transfer states. A failed transfer ends CANCELLED, never FAILED. */
-export type TransferStatus = 'CREATED' | 'PROCESSING' | 'SENT' | 'PAID' | 'CANCELLED';
+/**
+ * Airwallex transfer states. A failed transfer ends CANCELLED, but can read FAILED for a few
+ * seconds first, so code treats both as a definite failure.
+ */
+export type TransferStatus = 'CREATED' | 'PROCESSING' | 'SENT' | 'PAID' | 'FAILED' | 'CANCELLED';
+
+export const isDeadTransfer = (s: TransferStatus | string) => s === 'FAILED' || s === 'CANCELLED';
 
 export interface TransferView {
   id: string;
@@ -23,6 +28,8 @@ export interface FxQuote {
   sellCurrency: Currency;
   buyCurrency: Currency;
   buyAmount: number;
+  /** What the conversion will take from the sell currency. */
+  sellAmount: number;
   clientRate: number;
 }
 

@@ -69,13 +69,13 @@ export class AirwallexRest implements AirwallexPort, SandboxSimulator {
 
   async quote(sell: Currency, buy: Currency, buyAmount: number): Promise<FxQuote> {
     // https://www.airwallex.com/docs/api/transactional_fx/quotes/create (buy_amount is a number here)
-    const q = await this.call<{ quote_id: string; client_rate: number }>('POST', '/fx/quotes/create', {
+    const q = await this.call<{ quote_id: string; client_rate: number; sell_amount: number }>('POST', '/fx/quotes/create', {
       sell_currency: sell,
       buy_currency: buy,
       buy_amount: Math.round(buyAmount * 100) / 100,
       validity: 'MIN_1',
     });
-    return { quoteId: q.quote_id, sellCurrency: sell, buyCurrency: buy, buyAmount, clientRate: q.client_rate };
+    return { quoteId: q.quote_id, sellCurrency: sell, buyCurrency: buy, buyAmount, sellAmount: Number(q.sell_amount), clientRate: q.client_rate };
   }
 
   async convert({ requestId, quote }: { requestId: string; quote: FxQuote }) {

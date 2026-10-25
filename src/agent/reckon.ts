@@ -1,6 +1,6 @@
 import type { Email, EmailSignal, Payable, Policy } from '../domain/types.js';
 import { payees } from '../domain/payees.js';
-import type { AirwallexPort, TransferView } from '../airwallex/port.js';
+import { isDeadTransfer, type AirwallexPort, type TransferView } from '../airwallex/port.js';
 import { Ledger, DuplicatePaymentError, type PaymentAttempt } from '../ledger/ledger.js';
 import { plan as buildPlan, type Decision, type Plan } from '../policy/plan.js';
 import { diffPlans, type DecisionChange } from '../policy/diff.js';
@@ -143,7 +143,12 @@ export class Reckon {
       case 'early_pay_link': {
         const r = book.receivables.find((x) => x.id === d.target)!;
         const link = await this.awx.createPaymentLink({ title: `${r.customer}: ${r.milestone}`, amount: d.amount, currency: d.currency, reference: r.id });
-        await this.awx.notifyShopper(link.id, r.customerEmail);
+        try {
+          await this.awx.notifyShopper(link.id, r.customerEmail);
+        } catch (err) {
+          // The link still works; the offer email in the outbox carries it either way.
+          this.note('link', `Airwallex could not email ${r.customerEmail} (${(err as Error).message.slice(0, 80)}); link sent in our own email.`);
+        }
         this.links.set(r.id, link.id);
         this.outbox.push({ decisionId: d.id, ...earlyPayOffer(r, d.amount, link.url, this.policy) });
         this.state.earlyPayLinks[r.id] = 'sent';
@@ -229,7 +234,7 @@ export class Reckon {
       this.note('incident', `${payableId}: Airwallex shows PAID; replied with the transfer reference, no new payment.`);
       return { outcome: 'already_paid', transfer: t };
     }
-    if (t.status !== 'CANCELLED') {
+    if (!isDeadTransfer(t.status)) {
       this.note('incident', `${payableId}: still ${t.status}; not paying again while it's in flight.`);
       return { outcome: 'in_flight', transfer: t };
     }

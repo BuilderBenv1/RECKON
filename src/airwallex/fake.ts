@@ -41,9 +41,11 @@ export class FakeAirwallex implements AirwallexPort, SandboxSimulator {
 
   async quote(sell: Currency, buy: Currency, buyAmount: number): Promise<FxQuote> {
     this.calls.push('POST /fx/quotes/create');
-    const q = { quoteId: this.id('quote'), sellCurrency: sell, buyCurrency: buy, buyAmount, clientRate: this.rates[buy] / this.rates[sell], used: false };
+    const clientRate = this.rates[buy] / this.rates[sell];
+    const q = { quoteId: this.id('quote'), sellCurrency: sell, buyCurrency: buy, buyAmount, sellAmount: r2(buyAmount * clientRate), clientRate, used: false };
     this.quotes.set(q.quoteId, q);
-    return { quoteId: q.quoteId, sellCurrency: sell, buyCurrency: buy, buyAmount, clientRate: q.clientRate };
+    const { used: _used, ...out } = q;
+    return out;
   }
 
   async convert({ requestId, quote }: { requestId: string; quote: FxQuote }) {
@@ -52,7 +54,7 @@ export class FakeAirwallex implements AirwallexPort, SandboxSimulator {
     if (!q) throw new Error('quote_not_found');
     if (q.used) throw new Error('quote_already_used');
     this.claim(requestId);
-    const sellAmount = r2(q.buyAmount * q.clientRate);
+    const sellAmount = q.sellAmount;
     if (this.wallet[q.sellCurrency] < sellAmount) throw new Error('insufficient_funds');
     q.used = true;
     this.wallet[q.sellCurrency] = r2(this.wallet[q.sellCurrency] - sellAmount);

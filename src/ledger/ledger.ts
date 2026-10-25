@@ -41,7 +41,7 @@ export class DuplicatePaymentError extends Error {
   }
 }
 
-const TERMINAL_FAILED: PaymentAttempt['status'][] = ['CANCELLED'];
+const TERMINAL_FAILED: PaymentAttempt['status'][] = ['FAILED', 'CANCELLED'];
 
 export const termsOf = (d: Decision): ApprovalTerms => ({
   id: d.id, kind: d.kind, target: d.target, amount: d.amount, currency: d.currency, amountUSD: d.amountUSD, reason: d.reason,

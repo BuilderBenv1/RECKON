@@ -127,3 +127,26 @@ describe('full offline story', () => {
     for (const id of decisionIds) expect(reckon.replay(id), id).toMatchObject({ ok: true });
   });
 });
+
+describe('live sandbox quirks', () => {
+  it('treats a transfer still reading FAILED (before auto-cancel) as dead, and replaces it once', async () => {
+    const { awx, reckon } = setup();
+    const p = seedBook.payables.find((x) => x.id === 'PAY-109-SUB')!;
+    const t = await reckon.pay(p);
+    const real = awx.getTransfer.bind(awx);
+    awx.getTransfer = async (id: string) => ({ ...(await real(id)), ...(id === t.id ? { status: 'FAILED' as const, failureType: 'ACCOUNT_CLOSED' } : {}) });
+    expect((await reckon.handleNotReceived('PAY-109-SUB')).outcome).toBe('replaced');
+    expect((await reckon.handleNotReceived('PAY-109-SUB')).outcome).toBe('in_flight');
+  });
+
+  it('keeps going when Airwallex cannot email the payment link', async () => {
+    const { awx, reckon } = setup();
+    awx.notifyShopper = async () => {
+      throw new Error('invalid shopper_email');
+    };
+    await reckon.ingestEmail(delayEmail);
+    const run = await reckon.run();
+    expect(run.executed).toContain('early_pay_link:REC-121-INV');
+    expect(reckon.outbox.some((m) => m.decisionId === 'early_pay_link:REC-121-INV')).toBe(true);
+  });
+});
