@@ -29,6 +29,19 @@ export interface StoryOptions {
 const h = (title: string) => console.log(`\n\x1b[1m== ${title} ==\x1b[0m`);
 const email = async (file: string) => JSON.parse(await readFile(`data/emails/${file}`, 'utf8')) as Email;
 
+/** Fails a SENT transfer with a bank-return reason, retrying once if the sandbox hiccups. */
+async function failTransfer(awx: StoryOptions['awx'], id: string) {
+  try {
+    await awx.transitionTransfer(id, 'FAILED', 'ACCOUNT_CLOSED');
+  } catch (err) {
+    await new Promise((r) => setTimeout(r, 3000));
+    const t = await awx.getTransfer(id);
+    if (t.status === 'FAILED' || t.status === 'CANCELLED') return;
+    if (t.status === 'PAID') throw new Error(`the sandbox settled ${id} before it could be failed`);
+    await awx.transitionTransfer(id, 'FAILED', 'ACCOUNT_CLOSED');
+  }
+}
+
 export async function runStory(o: StoryOptions): Promise<Reckon> {
   const { awx } = o;
   const book = await readBook('data/finance.xlsx', AS_OF);
@@ -52,14 +65,6 @@ export async function runStory(o: StoryOptions): Promise<Reckon> {
     }
   };
 
-  // ---- setup: last week's instalment 2 to the electrical subcontractor, sent and in flight.
-  // The opening balance includes it so the story starts from the book's cash position.
-  await awx.deposit(2500, 'USD', 'Opening balance');
-  const prior = await reckon.pay({
-    id: 'PAY-109-SUB-I2', job: '109', supplier: 'Brightline Electrical Inc', description: 'Subcontractor instalment 2',
-    amount: 2500, currency: 'USD', dueDay: -6, method: 'LOCAL', newPayee: false, acceptsSplit: false, deferPenaltyUSD: 0,
-  });
-  await awx.transitionTransfer(prior.id, 'SENT');
   await reckon.refreshBalances();
 
   h("1. Morning read: the finance team's sheet, balances and overnight receipts");
@@ -110,13 +115,28 @@ export async function runStory(o: StoryOptions): Promise<Reckon> {
   console.log(`Cash ${fmt(final.summary.cashUSD, 'USD')} vs floor ${fmt(final.summary.reserveFloorUSD, 'USD')}: ${final.summary.cashUSD >= final.summary.reserveFloorUSD ? 'floor holds' : 'FLOOR BREACHED'}`);
 
   h("7. Supplier chases last week's instalment");
-  await awx.transitionTransfer(prior.id, 'FAILED', 'ACCOUNT_CLOSED');
-  await reckon.ingestEmail(await email('03-brightline-not-received.json'));
-  const incident = await reckon.handleNotReceived('PAY-109-SUB-I2');
-  console.log('Outcome:', incident.outcome, incident.outcome === 'replaced' ? `${incident.original.id} -> ${incident.replacement.id}` : '');
-  const again = await reckon.handleNotReceived('PAY-109-SUB-I2');
-  console.log('Second chase:', again.outcome, '(no second payment)');
-  console.log('Attempts:', reckon.paymentAttempts().filter((a) => a.payableId === 'PAY-109-SUB-I2').map((a) => `${a.transferId} ${a.status}`).join(' | '));
+  try {
+    // Last week's instalment 2 is set up here, not at the start: a real sandbox settles a SENT
+    // transfer within minutes, and a settled transfer can't be failed. The opening deposit and
+    // the payment cancel out, so steps 1 to 6 see the same balances either way.
+    await awx.deposit(2500, 'USD', 'Opening balance');
+    const prior = await reckon.pay({
+      id: 'PAY-109-SUB-I2', job: '109', supplier: 'Brightline Electrical Inc', description: 'Subcontractor instalment 2',
+      amount: 2500, currency: 'USD', dueDay: -6, method: 'LOCAL', newPayee: false, acceptsSplit: false, deferPenaltyUSD: 0,
+    });
+    await awx.transitionTransfer(prior.id, 'SENT');
+    console.log(`Last week's instalment 2: ${prior.id}, sent. The beneficiary's bank now returns it (account closed).`);
+    await failTransfer(awx, prior.id);
+    await reckon.ingestEmail(await email('03-brightline-not-received.json'));
+    const incident = await reckon.handleNotReceived('PAY-109-SUB-I2');
+    console.log('Outcome:', incident.outcome, incident.outcome === 'replaced' ? `${incident.original.id} -> ${incident.replacement.id}` : incident.outcome === 'blocked' ? incident.reason : '');
+    const again = await reckon.handleNotReceived('PAY-109-SUB-I2');
+    console.log('Second chase:', again.outcome, '(no second payment)');
+    console.log('Attempts:', reckon.paymentAttempts().filter((a) => a.payableId === 'PAY-109-SUB-I2').map((a) => `${a.transferId} ${a.status}`).join(' | '));
+  } catch (err) {
+    console.log(`Step 7 could not complete against the sandbox: ${(err as Error).message}`);
+    console.log('Carrying on with steps 8 and 9.');
+  }
 
   h("8. Decisions written back to the finance team's sheet");
   await mkdir(o.outDir, { recursive: true });
