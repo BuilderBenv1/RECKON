@@ -1,7 +1,7 @@
 import type { Email, EmailSignal, Payable, Policy } from '../domain/types.js';
 import { payees } from '../domain/payees.js';
 import { isDeadTransfer, type AirwallexPort, type TransferView } from '../airwallex/port.js';
-import { Ledger, DuplicatePaymentError, type PaymentAttempt } from '../ledger/ledger.js';
+import { Ledger, DuplicatePaymentError, type LedgerSnapshot, type PaymentAttempt } from '../ledger/ledger.js';
 import { plan as buildPlan, type Decision, type Plan } from '../policy/plan.js';
 import { diffPlans, type DecisionChange } from '../policy/diff.js';
 import { replay, type ReplayResult } from '../policy/replay.js';
@@ -24,6 +24,15 @@ export interface LogEntry {
   text: string;
 }
 
+export interface ReckonSnapshot {
+  state: CashState;
+  ledger: LedgerSnapshot;
+  outbox: OutboxMessage[];
+  log: LogEntry[];
+  links: [string, string][];
+  lastPlan: Plan | null;
+}
+
 export type IncidentOutcome =
   | { outcome: 'already_paid'; transfer: TransferView }
   | { outcome: 'in_flight'; transfer: TransferView }
@@ -35,10 +44,10 @@ export type IncidentOutcome =
  * Every money movement goes through the ledger's lock and the policy engine's decision.
  */
 export class Reckon {
-  readonly ledger = new Ledger();
-  readonly outbox: OutboxMessage[] = [];
-  readonly log: LogEntry[] = [];
-  readonly links = new Map<string, string>();
+  ledger = new Ledger();
+  outbox: OutboxMessage[] = [];
+  log: LogEntry[] = [];
+  links = new Map<string, string>();
   lastPlan: Plan | null = null;
 
   constructor(
@@ -49,6 +58,49 @@ export class Reckon {
     private readonly clock: () => string,
     private readonly newId: () => string = () => crypto.randomUUID(),
   ) {}
+
+  /** Everything needed to carry on later in another process (serverless requests). */
+  snapshot(): ReckonSnapshot {
+    return structuredClone({
+      state: this.state,
+      ledger: this.ledger.snapshot(),
+      outbox: this.outbox,
+      log: this.log,
+      links: [...this.links],
+      lastPlan: this.lastPlan,
+    });
+  }
+
+  static restore(
+    s: ReckonSnapshot,
+    policy: Policy,
+    awx: AirwallexPort,
+    reader: EmailReader,
+    clock: () => string,
+    newId?: () => string,
+  ): Reckon {
+    const c = structuredClone(s);
+    const r = new Reckon(c.state, policy, awx, reader, clock, newId);
+    r.ledger = Ledger.restore(c.ledger);
+    r.outbox = c.outbox;
+    r.log = c.log;
+    r.links = new Map(c.links);
+    r.lastPlan = c.lastPlan;
+    return r;
+  }
+
+  /** Re-reads one transfer (e.g. after a webhook) and records its latest status. */
+  async syncTransfer(transferId: string): Promise<TransferView | null> {
+    const attempt = this.ledger.attempts.find((a) => a.transferId === transferId);
+    if (!attempt) return null;
+    const t = await this.awx.getTransfer(transferId);
+    if (t.status !== attempt.status) {
+      this.ledger.updateAttempt(attempt.requestId, { status: t.status, ...(t.failureType ? { failureType: t.failureType } : {}) });
+      this.note('execute', `${attempt.payableId}: Airwallex reports ${t.status}${t.failureType ? ` (${t.failureType})` : ''}.`);
+    }
+    if (t.status === 'PAID' || isDeadTransfer(t.status)) await this.refreshBalances();
+    return t;
+  }
 
   private note(kind: LogEntry['kind'], text: string) {
     this.log.push({ at: this.clock(), kind, text });

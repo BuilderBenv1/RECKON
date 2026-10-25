@@ -13,6 +13,7 @@ import { replay } from '../src/policy/replay.js';
 import { reconcile } from '../src/recon/match.js';
 import type { ReconFixture } from '../src/recon/types.js';
 import { readBook, writeBook } from '../src/sheet/workbook.js';
+import { setupReturnedInstalment } from '../src/demo/incident.js';
 
 export const AS_OF = '2026-11-02';
 
@@ -28,19 +29,6 @@ export interface StoryOptions {
 
 const h = (title: string) => console.log(`\n\x1b[1m== ${title} ==\x1b[0m`);
 const email = async (file: string) => JSON.parse(await readFile(`data/emails/${file}`, 'utf8')) as Email;
-
-/** Fails a SENT transfer with a bank-return reason, retrying once if the sandbox hiccups. */
-async function failTransfer(awx: StoryOptions['awx'], id: string) {
-  try {
-    await awx.transitionTransfer(id, 'FAILED', 'ACCOUNT_CLOSED');
-  } catch (err) {
-    await new Promise((r) => setTimeout(r, 3000));
-    const t = await awx.getTransfer(id);
-    if (t.status === 'FAILED' || t.status === 'CANCELLED') return;
-    if (t.status === 'PAID') throw new Error(`the sandbox settled ${id} before it could be failed`);
-    await awx.transitionTransfer(id, 'FAILED', 'ACCOUNT_CLOSED');
-  }
-}
 
 export async function runStory(o: StoryOptions): Promise<Reckon> {
   const { awx } = o;
@@ -116,17 +104,8 @@ export async function runStory(o: StoryOptions): Promise<Reckon> {
 
   h("7. Supplier chases last week's instalment");
   try {
-    // Last week's instalment 2 is set up here, not at the start: a real sandbox settles a SENT
-    // transfer within minutes, and a settled transfer can't be failed. The opening deposit and
-    // the payment cancel out, so steps 1 to 6 see the same balances either way.
-    await awx.deposit(2500, 'USD', 'Opening balance');
-    const prior = await reckon.pay({
-      id: 'PAY-109-SUB-I2', job: '109', supplier: 'Brightline Electrical Inc', description: 'Subcontractor instalment 2',
-      amount: 2500, currency: 'USD', dueDay: -6, method: 'LOCAL', newPayee: false, acceptsSplit: false, deferPenaltyUSD: 0,
-    });
-    await awx.transitionTransfer(prior.id, 'SENT');
-    console.log(`Last week's instalment 2: ${prior.id}, sent. The beneficiary's bank now returns it (account closed).`);
-    await failTransfer(awx, prior.id);
+    const prior = await setupReturnedInstalment(reckon, awx);
+    console.log(`Last week's instalment 2: ${prior.id}, sent, then returned by the beneficiary's bank (account closed).`);
     await reckon.ingestEmail(await email('03-brightline-not-received.json'));
     const incident = await reckon.handleNotReceived('PAY-109-SUB-I2');
     console.log('Outcome:', incident.outcome, incident.outcome === 'replaced' ? `${incident.original.id} -> ${incident.replacement.id}` : incident.outcome === 'blocked' ? incident.reason : '');

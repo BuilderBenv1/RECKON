@@ -3,6 +3,14 @@ import type { PayeeDetails } from '../domain/payees.js';
 import { isDeadTransfer, type AirwallexPort, type FxQuote, type PaymentLinkView, type SandboxSimulator, type TransferView } from './port.js';
 
 const SWIFT_FEE_EUR = 12.85;
+
+export interface EnvelopeSnapshot {
+  wallet: Balances;
+  refunded: string[];
+  credited: string[];
+  beneficiaries: [string, string][];
+  transferMeta: [string, { amount: number; currency: Currency; swift: boolean }][];
+}
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
 /**
@@ -24,6 +32,26 @@ export class OperatingEnvelope implements AirwallexPort, SandboxSimulator {
 
   constructor(private readonly inner: AirwallexPort & SandboxSimulator, start: Balances) {
     this.wallet = { ...start };
+  }
+
+  snapshot(): EnvelopeSnapshot {
+    return structuredClone({
+      wallet: this.wallet,
+      refunded: [...this.refunded],
+      credited: [...this.credited],
+      beneficiaries: [...this.beneficiaries],
+      transferMeta: [...this.transferMeta],
+    });
+  }
+
+  static restore(inner: AirwallexPort & SandboxSimulator, s: EnvelopeSnapshot): OperatingEnvelope {
+    const e = new OperatingEnvelope(inner, s.wallet);
+    const c = structuredClone(s);
+    e.refunded = new Set(c.refunded);
+    e.credited = new Set(c.credited);
+    e.beneficiaries = new Map(c.beneficiaries);
+    e.transferMeta = new Map(c.transferMeta);
+    return e;
   }
 
   async balances(): Promise<Balances> {

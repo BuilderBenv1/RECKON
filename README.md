@@ -8,10 +8,18 @@ Most treasury agents decide who doesn't get paid. Reckon also goes and gets mone
 
 Every decision can be replayed from its stored inputs to the identical answer.
 
-## The story in one run
+## Try it
+
+The hosted app walks through the whole story one step at a time: the MD's brief, approvals bound to exact terms, what each new fact changed, every decision with a replay button, and the money that moved. Demo runs use a simulated Airwallex, so anyone can click through; live runs make real Airwallex sandbox calls and receive webhooks.
 
 ```
 npm install
+npm run dev            # http://localhost:3000
+```
+
+## The story in one run (terminal)
+
+```
 npm run seed:sheet     # builds the synthetic finance workbook and reconciliation fixture
 npm run demo:offline   # replays the whole story against an in-memory Airwallex
 npm test
@@ -43,6 +51,7 @@ npm test
 ## How it's built
 
 ```
+app/           Next.js page and API routes: run, action, Airwallex webhook
 src/
   domain/      types, synthetic seed data, synthetic payees
   policy/      the planner (pure), diff, replay and hashing
@@ -50,7 +59,12 @@ src/
   sheet/       read and write the finance team's workbook
   airwallex/   one port: REST client for the sandbox, plus an in-memory fake
   ledger/      decision ledger, approvals bound to terms, never-pay-twice lock
-  agent/       the loop: plan, record, execute what policy allows, react to emails and payments
+  agent/       the loop: plan, record, execute what policy allows, react to emails and payments;
+               Claude email reader and message drafter, both checked by code
+  demo/        the story as a saved session, shared by the web app and the scripts
+  store/       run storage between requests (Supabase, or memory locally)
+  webhooks/    Airwallex signature check and event handling
+  web/         what the page shows, built server-side
 scripts/       seed, offline demo, sandbox smoke test
 data/          synthetic workbook, emails and reconciliation fixture
 ```
@@ -58,6 +72,8 @@ data/          synthetic workbook, emails and reconciliation fixture
 - **The planner is pure.** `plan(state, policy)` has no I/O, so the same inputs always give the same plan. That's what makes replay possible.
 - **The model is narrow.** Claude reads an email and returns one typed signal (a delay, a split accepted, a payment not received). Every id and number it returns is validated against the book, and the planner decides what the signal means. Without an API key, a deterministic fixture reader stands in.
 - **Money moves only through the Airwallex port,** and only for decisions the planner made and the ledger allows.
+- **Claude drafts the supplier and customer emails, but the numbers are code's.** A draft is used only if it keeps every amount, percentage and link from the template exactly and adds none; otherwise the template goes out.
+- **Serverless-safe.** Each request restores the run from its saved snapshot, acts, and saves it with an optimistic version check, so a webhook landing mid-request is retried rather than overwritten.
 
 ## Running against the Airwallex sandbox
 
@@ -69,6 +85,23 @@ data/          synthetic workbook, emails and reconciliation fixture
 A new sandbox starts with millions in every currency, so a real cash gap would never appear. The live run plans from the business's own operating balance instead: every call goes to Airwallex, and an operating envelope moves the story-sized balance with each real conversion, transfer, cancellation, deposit and paid link.
 
 Use a **scoped API key** with read and write on Core Resources, Simulations, Payment Acceptance, Payouts and Transactional FX. Admin keys are disabled on new sandbox accounts.
+
+## Hosting on Vercel
+
+1. **Supabase.** Create a free project, then run `supabase/migrations/0001_reckon.sql` in its SQL editor. Copy the project URL and the service role key (Project settings > API).
+2. **Vercel.** Import the GitHub repo. It's detected as Next.js; no build settings to change. Add these environment variables:
+
+| Variable | Needed for | Notes |
+| --- | --- | --- |
+| `SUPABASE_URL` | Everything on Vercel | Without it, runs are kept in server memory and reset between requests |
+| `SUPABASE_SERVICE_ROLE_KEY` | Everything on Vercel | Server-side only; never exposed to the browser |
+| `AWX_CLIENT_ID`, `AWX_API_KEY` | Live runs | Sandbox scoped key; without them only demo runs are offered |
+| `RECKON_LIVE_CODE` | Live runs | Access code people must enter to start a live run |
+| `AIRWALLEX_WEBHOOK_SECRET` | Live runs | The webhook's secret from Airwallex (step 3) |
+| `ANTHROPIC_API_KEY` | Claude | Live runs use Claude to read emails and draft messages |
+| `RECKON_DEMO_CLAUDE` | Optional | Set to `1` to let public demo runs use Claude too (capped at 40 calls a run) |
+
+3. **Airwallex webhook.** In the sandbox web app, go to Developer > Webhooks and add `https://<your-app>.vercel.app/api/webhooks/airwallex` for `payment_intent.succeeded`, `payout.transfer.paid`, `payout.transfer.failed` and `payout.transfer.cancelled`. Copy its secret into `AIRWALLEX_WEBHOOK_SECRET` and redeploy. Paying the customer's link then replans the agent on its own; without the webhook, the page checks the link every few seconds instead.
 
 All data is synthetic. No real business, customer or supplier appears anywhere in this repo.
 

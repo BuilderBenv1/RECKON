@@ -47,12 +47,33 @@ export const termsOf = (d: Decision): ApprovalTerms => ({
   id: d.id, kind: d.kind, target: d.target, amount: d.amount, currency: d.currency, amountUSD: d.amountUSD, reason: d.reason,
 });
 
+export interface LedgerSnapshot {
+  records: DecisionRecord[];
+  approvals: [string, Approval][];
+  attempts: PaymentAttempt[];
+  executed: string[];
+}
+
 /** Decision ledger, approvals bound to exact terms, and the never-pay-twice lock. */
 export class Ledger {
-  readonly records: DecisionRecord[] = [];
-  readonly approvals = new Map<string, Approval>();
-  readonly attempts: PaymentAttempt[] = [];
-  readonly executed = new Set<string>();
+  records: DecisionRecord[] = [];
+  approvals = new Map<string, Approval>();
+  attempts: PaymentAttempt[] = [];
+  executed = new Set<string>();
+
+  snapshot(): LedgerSnapshot {
+    return structuredClone({ records: this.records, approvals: [...this.approvals], attempts: this.attempts, executed: [...this.executed] });
+  }
+
+  static restore(s: LedgerSnapshot): Ledger {
+    const l = new Ledger();
+    const c = structuredClone(s);
+    l.records = c.records;
+    l.approvals = new Map(c.approvals);
+    l.attempts = c.attempts;
+    l.executed = new Set(c.executed);
+    return l;
+  }
 
   get head(): string {
     return this.records.at(-1)?.hash ?? 'genesis';

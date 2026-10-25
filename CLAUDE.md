@@ -5,6 +5,7 @@ Needs: working demo, video under 5 minutes, this repo with setup instructions.
 
 ## Commands
 
+- `npm run dev` / `npm run build`: the Next.js web app (MD brief, approvals, diff, replay, story steps)
 - `npm test`: vitest suite; must stay green
 - `npm run typecheck`
 - `npm run seed:sheet`: rebuild `data/finance.xlsx` and `data/recon.json` from `src/domain/seed.ts` and `src/recon/fixture.ts`
@@ -24,10 +25,15 @@ Needs: working demo, video under 5 minutes, this repo with setup instructions.
 - Airwallex conventions from the builder guide: amounts in major units; failed transfers end CANCELLED (read `failure_type`); simulate SENT before FAILED; SWIFT costs EUR 12.85 per payout; FX quotes are single-use; no `x-api-version` on FX calls; FX conversions are REST-only; bearer token lasts 30 minutes.
 - Airwallex field names in `src/airwallex/rest.ts` were checked against the API reference (linked per method) on 23 Oct 2026. `npm run sandbox:smoke` confirms them live. Transfer `reason` is a closed list; simulated `failure_type` values include ACCOUNT_CLOSED (not BENEFICIARY_ACCOUNT_CLOSED).
 
+## Web app
+
+- `app/` is thin: pages and API routes call `src/web/server.ts`. All behaviour lives in `src/demo/session.ts` (one run, saved as a snapshot between requests) and `src/web/view.ts` (what the page shows, from a fresh pure plan).
+- Runs are stored by `src/store/runs.ts`: Supabase over REST with an optimistic `version` check, or memory without Supabase env vars. `withRun` retries on conflict.
+- Webhooks: `app/api/webhooks/airwallex` verifies hex HMAC-SHA256 over `x-timestamp + raw body`, dedupes on event id, then `src/webhooks/airwallex.ts` applies it to live runs.
+- Demo runs never call Airwallex. Live runs need `RECKON_LIVE_CODE`. Public demo runs use Claude only with `RECKON_DEMO_CLAUDE=1`, capped at `CLAUDE_CALL_LIMIT` calls a run.
+- Engine files import each other with `.js` extensions; `next.config.mjs` maps them to `.ts`. JSON fixtures the server needs are imported statically so Vercel bundles them.
+
 ## Next up
 
-- (done 25 Oct 2026) First full `demo:live` run: all 9 steps passed on the real sandbox with Claude reading the emails
-- Webhook receiver for `payment_intent.succeeded` and `payout.transfer.*` (verify HMAC on the raw body, dedupe on event id)
-- MD brief and approval page (Next.js), plan diff view, replay button
-- Supabase persistence for the ledger
-- Claude-drafted supplier and customer messages, numbers still from code
+- Deploy to Vercel with Supabase; add the Airwallex webhook; run a live run from the hosted page
+- Record the video

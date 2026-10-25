@@ -3,6 +3,16 @@ import type { PayeeDetails } from '../domain/payees.js';
 import type { AirwallexPort, FxQuote, PaymentLinkView, SandboxSimulator, TransferView } from './port.js';
 
 const SWIFT_FEE_EUR = 12.85;
+
+export interface FakeSnapshot {
+  wallet: Balances;
+  seq: number;
+  quotes: [string, FxQuote & { used: boolean }][];
+  requestIds: string[];
+  transfers: [string, TransferView & { fee: number }][];
+  beneficiaries: [string, string][];
+  links: [string, PaymentLinkView][];
+}
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
 /**
@@ -22,6 +32,30 @@ export class FakeAirwallex implements AirwallexPort, SandboxSimulator {
 
   constructor(balances: Balances, private rates: Rates) {
     this.wallet = { ...balances };
+  }
+
+  snapshot(): FakeSnapshot {
+    return structuredClone({
+      wallet: this.wallet,
+      seq: this.seq,
+      quotes: [...this.quotes],
+      requestIds: [...this.requestIds],
+      transfers: [...this.transfers],
+      beneficiaries: [...this.beneficiaries],
+      links: [...this.links],
+    });
+  }
+
+  static restore(s: FakeSnapshot, rates: Rates): FakeAirwallex {
+    const f = new FakeAirwallex(s.wallet, rates);
+    const c = structuredClone(s);
+    f.seq = c.seq;
+    f.quotes = new Map(c.quotes);
+    f.requestIds = new Set(c.requestIds);
+    f.transfers = new Map(c.transfers);
+    f.beneficiaries = new Map(c.beneficiaries);
+    f.links = new Map(c.links);
+    return f;
   }
 
   private id(prefix: string) {
