@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { defaultPolicy, seedBalances, seedBook, seedRates } from '../src/domain/seed.js';
 import { FakeAirwallex } from '../src/airwallex/fake.js';
-import { FixtureReader, validate } from '../src/agent/reader.js';
+import { ClaudeReader, FixtureReader, validate } from '../src/agent/reader.js';
 import { Reckon } from '../src/agent/reckon.js';
 import { DuplicatePaymentError, Ledger } from '../src/ledger/ledger.js';
 import { plan } from '../src/policy/plan.js';
@@ -148,5 +148,38 @@ describe('live sandbox quirks', () => {
     const run = await reckon.run();
     expect(run.executed).toContain('early_pay_link:REC-121-INV');
     expect(reckon.outbox.some((m) => m.decisionId === 'early_pay_link:REC-121-INV')).toBe(true);
+  });
+});
+
+describe('Claude email reader', () => {
+  const email = { id: 'EM-01', from: 'accounts@westfield-academy.example', subject: 'Re: Invoice', body: 'next Tuesday' };
+  const client = (content: unknown[]) => {
+    const calls: Record<string, unknown>[] = [];
+    return {
+      calls,
+      messages: {
+        create: async (body: Record<string, unknown>) => {
+          calls.push(body);
+          return { content } as never;
+        },
+      },
+    };
+  };
+
+  it('does not force a tool call (some models reject that) and reads the tool answer', async () => {
+    const c = client([{ type: 'tool_use', id: 't1', name: 'record_signal', input: { kind: 'receipt_delayed', receivableId: 'REC-109-M3', newExpectedDay: 8, evidence: 'following Tuesday' } }]);
+    const signal = await new ClaudeReader('test-model', c as never).read(email, seedBook);
+    expect(signal).toMatchObject({ kind: 'receipt_delayed', newExpectedDay: 8 });
+    expect(c.calls[0]?.tool_choice).toEqual({ type: 'auto' });
+  });
+
+  it('accepts a JSON answer in plain text, still validated', async () => {
+    const c = client([{ type: 'text', text: 'Here: {"kind":"split_accepted","payableId":"PAY-121-COMP","evidence":"works for us"}' }]);
+    expect(await new ClaudeReader('m', c as never).read(email, seedBook)).toMatchObject({ kind: 'split_accepted' });
+  });
+
+  it('returns none when the model gives nothing usable', async () => {
+    const c = client([{ type: 'text', text: 'Not sure.' }]);
+    expect((await new ClaudeReader('m', c as never).read(email, seedBook)).kind).toBe('none');
   });
 });

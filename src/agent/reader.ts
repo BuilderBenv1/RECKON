@@ -25,11 +25,29 @@ const SIGNAL_TOOL = {
   },
 };
 
-/** Uses Claude to extract the signal. Ids it returns are checked against the book. */
+/** The part of the Anthropic client the reader uses, so tests can stand in for it. */
+export interface MessagesClient {
+  messages: { create(body: Anthropic.MessageCreateParamsNonStreaming): Promise<{ content: Anthropic.ContentBlock[] }> };
+}
+
+const SYSTEM = [
+  'You read one business email for a finance team and record the single finance-relevant fact in it.',
+  'Always answer by calling the record_signal tool exactly once. If the email has no such fact, call it with kind "none".',
+  'Use only ids from the open items list. Give dates as whole days from today.',
+].join(' ');
+
+/**
+ * Uses Claude to extract the signal. Ids and numbers it returns are checked against the book.
+ * Some models refuse a forced tool call, so the tool is offered with tool_choice "auto" and a
+ * firm instruction; a JSON answer in plain text is accepted as a fallback.
+ */
 export class ClaudeReader implements EmailReader {
-  private client: Anthropic;
-  constructor(private model = process.env.RECKON_MODEL ?? 'claude-sonnet-5-5', apiKey = process.env.ANTHROPIC_API_KEY) {
-    this.client = new Anthropic({ apiKey });
+  private client: MessagesClient;
+  constructor(
+    private model = process.env.RECKON_MODEL ?? 'claude-sonnet-5-5',
+    client?: MessagesClient,
+  ) {
+    this.client = client ?? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   }
 
   async read(email: Email, book: FinanceBook): Promise<EmailSignal> {
@@ -39,21 +57,32 @@ export class ClaudeReader implements EmailReader {
       'payable PAY-109-SUB-I2: Brightline Electrical Inc, subcontractor instalment 2 (sent last week)',
       'invoice HLH-INV-0381: Harbour Lane Hotels',
     ].join('\n');
+    const weekday = new Date(`${book.asOf}T12:00:00Z`).toLocaleDateString('en-GB', { weekday: 'long', timeZone: 'UTC' });
     const res = await this.client.messages.create({
       model: this.model,
-      max_tokens: 400,
+      max_tokens: 2000,
+      system: SYSTEM,
       tools: [SIGNAL_TOOL],
-      tool_choice: { type: 'tool', name: SIGNAL_TOOL.name },
+      tool_choice: { type: 'auto' },
       messages: [
         {
           role: 'user',
-          content: `Today is ${book.asOf}. Open items:\n${openItems}\n\nEmail from ${email.from}\nSubject: ${email.subject}\n\n${email.body}`,
+          content: `Today is ${weekday} ${book.asOf}. Open items:\n${openItems}\n\nEmail from ${email.from}\nSubject: ${email.subject}\n\n${email.body}`,
         },
       ],
     });
-    const block = res.content.find((b) => b.type === 'tool_use');
-    if (!block || block.type !== 'tool_use') return { kind: 'none', evidence: 'model returned no signal' };
-    return validate(block.input as Record<string, unknown>, book);
+    const tool = res.content.find((b) => b.type === 'tool_use' && b.name === SIGNAL_TOOL.name);
+    if (tool && tool.type === 'tool_use') return validate(tool.input as Record<string, unknown>, book);
+    const text = res.content.map((b) => (b.type === 'text' ? b.text : '')).join('\n');
+    const json = text.match(/\{[\s\S]*\}/);
+    if (json) {
+      try {
+        return validate(JSON.parse(json[0]) as Record<string, unknown>, book);
+      } catch {
+        /* fall through */
+      }
+    }
+    return { kind: 'none', evidence: 'model returned no signal' };
   }
 }
 
