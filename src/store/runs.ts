@@ -115,7 +115,9 @@ export class SupabaseRunStore implements RunStore {
       method,
       headers: {
         apikey: this.serviceKey,
-        Authorization: `Bearer ${this.serviceKey}`,
+        // Legacy service_role keys are JWTs and go in Authorization too; new sb_secret_ keys
+        // belong in the apikey header only.
+        ...(this.serviceKey.startsWith('eyJ') ? { Authorization: `Bearer ${this.serviceKey}` } : {}),
         'Content-Type': 'application/json',
         ...(prefer ? { Prefer: prefer } : {}),
       },
