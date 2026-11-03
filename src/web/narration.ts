@@ -45,35 +45,35 @@ export function intro(v: RunView): Beat[] {
     {
       focus: 'hero',
       extra: true,
-      text: "Hi. I'm an AI narrator, and I'm going to walk you through a project called Reckon. It was built for the Airwallex Agentic Banking Hackathon, and it's an AI agent that looks after a company's cash.",
+      text: "Hi, I'm an AI voice, and I'll be taking you through Reckon. Reckon's an AI agent that looks after a company's cash, and it was built for the Airwallex Agentic Banking Hackathon.",
     },
     {
       focus: 'hero',
       extra: true,
       text:
-        "Here's the problem it solves. Lots of UK businesses work project by project: fit-outs, installations, building work. Customers pay in stages, suppliers want paying, often in different currencies, and some weeks there isn't quite enough cash to go round. " +
-        'So every morning, someone sits with a spreadsheet and decides who gets paid, and who waits.',
+        "It's aimed at UK businesses that work on projects, so fit-out firms, installers, builders. Their customers pay in stages, their suppliers want paying, sometimes in euros or dollars, and there are weeks when the money doesn't quite stretch. " +
+        'Usually someone in the office sits down with a spreadsheet every morning and works out who gets paid and who has to wait.',
     },
     {
       focus: 'hero',
       extra: true,
       text:
-        "Reckon does that job. Every morning it reads the finance team's own spreadsheet and the bank, works out what's due, pays what it safely can through Airwallex, and only asks the managing director about the things that really need a person. " +
-        "And one rule matters more than any other. The AI never decides the money. Amounts, limits and approvals are all ordinary code. The AI reads emails and writes messages, and that's all.",
+        'Reckon does that every morning. It reads the spreadsheet the finance team already uses, checks the bank, pays what it safely can through Airwallex, and only goes to the managing director when a person really needs to decide. ' +
+        'The AI never decides any amounts. That is all done by ordinary code, with fixed rules. The AI just reads the emails and writes the messages.',
     },
     {
       focus: 'hero',
       text:
-        "Let's watch Reckon run one Monday morning. " +
-        (v.mode === 'demo' ? 'In this demo, Airwallex is simulated. Live mode runs exactly the same steps for real.' : 'This run is talking to the real Airwallex sandbox.'),
+        "So, let's go through a Monday morning. " +
+        (v.mode === 'demo' ? 'Airwallex is simulated in this demo, but the live version runs the same steps for real.' : "This one's running against the real Airwallex sandbox."),
     },
   ];
   beats.push({
     focus: 'hero',
     text:
       s.gapUSD <= 0
-        ? `Overnight, it's read the finance team's own spreadsheet and the bank balances. And right now the week's covered, with ${say(-s.gapUSD)} to spare above the ${sayAdj(s.reserveFloorUSD)} reserve.`
-        : `Overnight, it's read the finance team's own spreadsheet and the bank balances, and the week is ${say(s.gapUSD)} short.`,
+        ? `Overnight it's been through the spreadsheet and the bank balance, and this week is covered. There's ${say(-s.gapUSD)} spare on top of the ${sayAdj(s.reserveFloorUSD)} reserve.`
+        : `Overnight it's been through the spreadsheet and the bank balance, and this week is ${say(s.gapUSD)} short.`,
   });
   if (v.recon.total) {
     const dup = v.recon.notable.some((r) => r.kind === 'instalment' && /not a duplicate/i.test(r.explanation));
@@ -81,9 +81,9 @@ export function intro(v: RunView): Beat[] {
     beats.push({
       focus: 'recon',
       text:
-        `It's also matched ${v.recon.auto} of the ${v.recon.total} overnight bank lines by itself` +
-        (dup ? ', including one that looks like a duplicate, but is really the next instalment.' : '.') +
-        (person ? (person === 1 ? " The one it couldn't place, it leaves for a person." : ` The ${person} it couldn't place, it leaves for a person.`) : ''),
+        `It's matched ${v.recon.auto} of the ${v.recon.total} bank lines from overnight on its own.` +
+        (dup ? ' One of them looked like a duplicate, but it was actually the next instalment of a payment plan.' : '') +
+        (person ? (person === 1 ? " The one it couldn't match has been left for someone to check." : ` The ${person} it couldn't match have been left for someone to check.`) : ''),
     });
   }
   const first = v.decisions.find((d) => d.kind === 'pay' && /ranked 1 because paying it releases/.test(d.reason));
@@ -91,7 +91,7 @@ export function intro(v: RunView): Beat[] {
   if (first && releases) {
     beats.push({
       focus: 'decisions',
-      text: `Now look at the order of the plan. That ${sayAdj(first.amount, first.currency)} bill on Job ${first.job} goes first. Nobody marked it urgent. It's first because paying it releases a ${sayAdj(num(releases[1]))} milestone ${releases[2] === first.job ? 'on the same job' : `on Job ${releases[2]}`}.`,
+      text: `Have a look at the order it's chosen. The ${sayAdj(first.amount, first.currency)} bill on Job ${first.job} is at the top, because paying it releases a ${sayAdj(num(releases[1]))} milestone ${releases[2] === first.job ? 'on the same job' : `on Job ${releases[2]}`}. Nobody had to flag it.`,
     });
   }
   const hold = v.needsYou.find((d) => d.kind === 'hold');
@@ -99,7 +99,7 @@ export function intro(v: RunView): Beat[] {
     const why = spoken(hold.reason.replace(/^Held for the MD:\s*/, '').replace(/\.$/, '').replace(/; /g, ', and '));
     beats.push({
       focus: 'brief',
-      text: `${v.needsYou.length === 1 ? "There's just one thing" : 'One thing'} for the managing director: a ${sayAdj(hold.amount, hold.currency)} payment on Job ${hold.job}. ${why}. So however much cash there is, Reckon won't pay it.`,
+      text: `${v.needsYou.length === 1 ? "There's one thing waiting for the managing director," : 'One of the things waiting for the managing director is'} a ${sayAdj(hold.amount, hold.currency)} payment on Job ${hold.job}. ${why}, so Reckon won't pay it, however much cash is in the bank.`,
     });
   }
   return beats;
@@ -108,21 +108,21 @@ export function intro(v: RunView): Beat[] {
 export function before(step: TourStep, v: RunView): Beat[] {
   switch (step) {
     case 'delay_email':
-      return [{ focus: 'steps', text: "Right. Now an email comes in. A customer's milestone payment is going to be a week late." }];
+      return [{ focus: 'steps', text: "Now an email comes in from a customer. Their milestone payment's going to be a week late." }];
     case 'run_0900':
-      return [{ focus: 'steps', text: "Nine o'clock. That's the payment cut-off, and Reckon gets on with everything policy lets it do by itself." }];
+      return [{ focus: 'steps', text: "It's nine o'clock, which is the cut-off for payments, so Reckon gets on with everything it's allowed to do by itself." }];
     case 'approve': {
       const c = v.needsYou.find((d) => d.kind === 'convert');
-      return [{ focus: 'brief', text: c ? `So the MD approves the conversion. Exactly ${say(c.amount, c.currency, true)}, and not a cent more.` : 'So the MD approves.' }];
+      return [{ focus: 'brief', text: c ? `The managing director approves the conversion, for exactly ${say(c.amount, c.currency, true)}.` : 'The managing director approves it.' }];
     }
     case 'customer_pays':
-      return [{ focus: 'payments', text: 'Now the customer takes the early-pay offer, and pays through the Airwallex link.' }];
+      return [{ focus: 'payments', text: 'Now the customer takes up the offer and pays the link.' }];
     case 'split_reply':
-      return [{ focus: 'steps', text: "The supplier agrees to split." }];
+      return [{ focus: 'steps', text: 'The supplier replies, and says yes to splitting the bill.' }];
     case 'chase':
-      return [{ focus: 'steps', text: "Now for the awkward one. A supplier emails to say last week's payment never arrived." }];
+      return [{ focus: 'steps', text: "Next, a supplier emails to say they never got last week's payment." }];
     case 'replay':
-      return [{ focus: 'proof', text: 'Last thing: proof. Every decision is stored with the inputs it was made from.' }];
+      return [{ focus: 'proof', text: 'Finally, every decision Reckon makes is saved, along with the information it was based on.' }];
   }
 }
 
@@ -134,37 +134,38 @@ export function after(step: TourStep, prev: RunView, v: RunView): Beat[] {
       beats.push({
         focus: 'signals',
         text: v.claude
-          ? 'Claude reads that email into one simple fact, checked against the books. Code, not the AI, decides what it means for the money.'
-          : "In a live run, Claude reads that email into one simple fact. Here it's a test fixture. Either way, code, not the AI, decides what it means.",
+          ? 'Claude has read that email and pulled out the one fact that matters, and that gets checked against the books before anything happens. What it means for the money is worked out in code.'
+          : 'In the live version, Claude reads that email and pulls out the one fact that matters. In this demo that comes from a test file. Either way, what it means for the money is worked out in code.',
       });
       const lost = prev.summary.expectedReceiptsUSD - s.expectedReceiptsUSD;
       beats.push({
         focus: 'hero',
         text:
-          (lost > 0 ? `Reckon was counting on that ${say(lost)}. ` : '') +
-          (s.gapUSD > 0 ? `${lost > 0 ? 'So now' : 'Now'} the week is ${say(s.gapUSD)} short.` : `The week is still covered.`),
+          (lost > 0 ? `Reckon was relying on that ${say(lost)}, so ` : '') +
+          (s.gapUSD > 0 ? `the week's now ${say(s.gapUSD)} short.` : `the week is still covered.`).replace(/^t/, lost > 0 ? 't' : 'T'),
       });
       const link = byKind(v, 'early_pay_link');
       const offer = link?.reason.match(/([\d.]+)% \(USD ([\d,]+)\) to pay USD ([\d,]+) today/);
       const levers: string[] = [];
-      if (offer) levers.push(`It offers a reliable customer ${say(num(offer[2]))}, that's ${offer[1]} percent, to pay ${say(num(offer[3]))} today by Airwallex payment link.`);
-      if (byKind(v, 'ask_split')) levers.push(`It asks a supplier who's said yes before to split their bill.`);
-      if (byKind(v, 'defer')) levers.push(`${levers.length ? 'And it' : 'It'} defers a software renewal that costs nothing to delay.`);
+      if (offer) levers.push(`It offers a customer who nearly always pays on time ${say(num(offer[2]))} off, that's ${offer[1]} percent, if they pay their ${say(num(offer[3]))} today with an Airwallex payment link.`);
+      if (byKind(v, 'ask_split')) levers.push("It asks a supplier who's agreed to it before if they'll take their bill in two halves.");
+      if (byKind(v, 'defer')) levers.push(`${levers.length ? 'And it puts' : 'It puts'} off a software renewal, which doesn't cost anything to delay.`);
       if (levers.length && s.gapUSD > 0) {
         beats.push({
           focus: 'decisions',
           text:
-            `This is where most cash tools just pick who waits. Reckon prices every way to close the gap. ${levers.join(' ')}` +
-            (s.gapAfterLeversUSD <= 0 ? ` Altogether, that closes the gap for ${say(s.leversCostUSD)}.` : ''),
+            `A lot of tools would just decide who doesn't get paid. Reckon looks at what it can do about it, and what each option costs. ${levers.join(' ')}` +
+            (s.gapAfterLeversUSD <= 0 ? ` Between them, that covers the gap for ${say(s.leversCostUSD)}.` : ''),
         });
       }
       const was = byId(prev, 'convert:EUR');
       const now = byId(v, 'convert:EUR');
       const limit = now?.reason.match(/Autonomous limit is USD ([\d,]+)/);
       if (was?.execution === 'auto' && now?.execution === 'approval' && limit) {
+        const dropped = prev.summary.forecastConfidence !== s.forecastConfidence;
         beats.push({
           focus: 'brief',
-          text: `And watch the euro conversion. At breakfast, Reckon could do that on its own. But forecast confidence has ${prev.summary.forecastConfidence !== s.forecastConfidence ? 'dropped to' : 'stayed'} ${s.forecastConfidence}, so its own limit drops to ${say(num(limit[1]))}, and a ${sayAdj(now.amountUSD)} conversion now goes to the MD.`,
+          text: `Watch the euro conversion as well. First thing this morning, Reckon could have done that by itself. ${dropped ? 'The forecast is less certain now, so its own limit has dropped to' : `Forecast confidence is ${s.forecastConfidence}, so its own limit is`} ${say(num(limit[1]))}, which means the ${sayAdj(now.amountUSD)} conversion goes to the managing director.`,
         });
       }
       return beats;
@@ -173,11 +174,11 @@ export function after(step: TourStep, prev: RunView, v: RunView): Beat[] {
       const kinds = new Set((v.last?.executed ?? []).map((id) => id.split(':')[0]));
       const did: string[] = [];
       if (kinds.has('pay')) did.push('made the payment it could');
-      if (kinds.has('ask_split')) did.push('sent the split request');
-      if (kinds.has('early_pay_link')) did.push('sent the early-pay link');
-      if (kinds.has('defer')) did.push('deferred the renewal');
+      if (kinds.has('ask_split')) did.push('sent the request to split the bill');
+      if (kinds.has('early_pay_link')) did.push('sent the payment link');
+      if (kinds.has('defer')) did.push('put off the renewal');
       const n = v.last?.executed.length ?? 0;
-      beats.push({ focus: 'payments', text: `That's ${n} decision${n === 1 ? '' : 's'} done without anyone. It ${listJoin(did)}.` });
+      beats.push({ focus: 'payments', text: `That's ${n} thing${n === 1 ? '' : 's'} done without anyone touching it. It ${listJoin(did)}.` });
       return beats;
     }
     case 'approve': {
@@ -186,40 +187,41 @@ export function after(step: TourStep, prev: RunView, v: RunView): Beat[] {
       beats.push({
         focus: 'payments',
         text:
-          "That approval is tied to those exact terms. Change any number, and it goes back to the MD. " +
-          `Reckon buys the euros${who.length ? `, and pays ${listJoin(who)} straight away` : ''}.`,
+          'That approval only covers those exact figures. If anything changed, it would come back for approval again. ' +
+          `Reckon buys the euros${who.length ? ` and pays ${listJoin(who)} straight away` : ''}.`,
       });
       return beats;
     }
     case 'customer_pays': {
       beats.push({
         focus: 'hero',
-        text: s.gapUSD <= 0 ? `The cash lands, Reckon replans on its own, and the week's covered again, with ${say(-s.gapUSD)} to spare.` : `The cash lands, and Reckon replans on its own. The week is ${say(s.gapUSD)} short.`,
+        text: s.gapUSD <= 0 ? `The money comes in, Reckon re-plans on its own, and the week is covered again, with ${say(-s.gapUSD)} spare.` : `The money comes in and Reckon re-plans on its own. The week is ${say(s.gapUSD)} short.`,
       });
       const paid = (v.last?.executed ?? []).filter((id) => id.startsWith('pay:')).map((id) => id.slice(4));
       const who = v.payments.filter((p) => paid.includes(p.payableId));
-      if (who.length) beats.push({ focus: 'payments', text: `And it pays what it was holding back until the money arrived. That's ${listJoin(who.map((p) => `${spoken(p.supplier)}, ${say(p.amount, p.currency)}`))}.` });
+      if (who.length) beats.push({ focus: 'payments', text: `It also pays ${listJoin(who.map((p) => `${spoken(p.supplier)}, ${say(p.amount, p.currency)}`))}, which it had been holding back until the money arrived.` });
       return beats;
     }
     case 'split_reply': {
       const half = v.payments.filter((p) => (v.last?.executed ?? []).includes(`pay:${p.payableId}`));
       beats.push({
         focus: 'payments',
-        text: `So Reckon converts only the pounds it actually needs, and pays the first half.${half.length ? ` ${listJoin(half.map((p) => `${say(p.amount, p.currency)} to ${spoken(p.supplier)}`))}.` : ''} The rest is due in two weeks.`,
+        text: `So Reckon converts just the pounds it needs and pays the first half${half.length ? `, ${listJoin(half.map((p) => `${say(p.amount, p.currency)} to ${spoken(p.supplier)}`))}` : ''}. The other half is due in two weeks.`,
       });
       return beats;
     }
     case 'chase': {
       const inc = v.incident;
       if (inc && inc.outcome === 'replaced' && inc.original) {
-        const failure = inc.original.failureType ? inc.original.failureType.replace(/_/g, ' ').toLowerCase() : 'failed';
+        const ft = inc.original.failureType ?? '';
+        const why = ft === 'ACCOUNT_CLOSED' ? 'because the account was closed' : ft ? `with the reason ${ft.replace(/_/g, ' ').toLowerCase()}` : 'unpaid';
         beats.push({
           focus: 'payments',
-          text: `Before it pays a thing, Reckon looks the transfer up on Airwallex. And it came back. ${failure[0]!.toUpperCase()}${failure.slice(1)}. So it sends one replacement, for ${say(inc.original.amount, inc.original.currency)}.`,
+          text: `Before paying anything, Reckon checks that payment on Airwallex. It was returned, ${why}. So it sends one replacement, for ${say(inc.original.amount, inc.original.currency)}.`,
         });
         beats.push({
           focus: 'payments',
-          text: "Then the supplier chases again. This time, Reckon finds the replacement already on its way, and pays nothing. It'll retry a payment, but it will never pay twice.",
+          text: "Then the supplier chases again. This time Reckon sees the replacement is already on its way, so it doesn't pay anything. It'll retry a failed payment, but it won't ever pay the same bill twice.",
         });
       } else if (v.last) {
         beats.push({ focus: 'payments', text: v.last.headline });
@@ -231,8 +233,8 @@ export function after(step: TourStep, prev: RunView, v: RunView): Beat[] {
       beats.push({
         focus: 'proof',
         text: r?.ok
-          ? 'Replay the euro conversion from those inputs, and you get the identical decision, with the same hash.'
-          : "Replaying the euro conversion from its stored inputs doesn't match.",
+          ? 'If you replay the euro conversion from that saved information, you get exactly the same decision, down to the same digital fingerprint.'
+          : "Replaying the euro conversion from that saved information doesn't match.",
       });
       return beats;
     }
@@ -245,8 +247,8 @@ export function afterTamper(v: RunView): Beat[] {
     {
       focus: 'proof',
       text: r?.tampered && !r.ok
-        ? "Now here's a copy where someone's quietly raised the FX limit. It fails the hash check. Nobody can edit the record after the fact."
-        : 'The tampered copy was checked.',
+        ? "And here's a copy where someone has quietly raised the currency limit. It doesn't match the fingerprint, so it gets caught. The record can't be changed after the event."
+        : 'The altered copy was checked.',
     },
   ];
 }
@@ -263,9 +265,8 @@ export function outro(_v: RunView, presenter?: string | null): Beat[] {
     {
       focus: 'hero',
       text:
-        "So that's Reckon. It ranks payments by what they unlock, holds spend with no budget, prices every way to close a gap, and can prove every decision it made. " +
-        'The money logic is all code, and every number the AI writes is checked. ' +
-        (name ? `Thanks for watching. Now, over to ${name}.` : 'Thanks for watching.'),
+        "So that's Reckon. It pays what matters first, holds back anything without a budget, finds the cheapest way to cover a shortfall, and can show exactly why it made every decision. " +
+        (name ? `Thanks for watching. I'll hand you over to ${name}.` : 'Thanks for watching.'),
     },
   ];
 }

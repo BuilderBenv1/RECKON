@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clipFor, clipKey, demoScript, findLine, lineId, MemoryClipStore, SupabaseClipStore, synthesise, voiceConfig } from '../src/web/voice.js';
+import { clipFor, clipKey, demoScript, findLine, lineId, MemoryClipStore, sampleFor, sampleLine, CANDIDATES, SupabaseClipStore, synthesise, voiceConfig } from '../src/web/voice.js';
 
 const cfg = { apiKey: 'test-key', voiceId: 'voice1', modelId: 'model1' };
 
@@ -8,9 +8,9 @@ describe('guided demo voice', () => {
     const lines = await demoScript();
     expect(lines.length).toBeGreaterThan(25);
     expect(new Set(lines.map(lineId)).size).toBe(lines.length);
-    expect(lines.some((l) => l.startsWith('In a live run, Claude reads that email'))).toBe(true);
-    expect(lines.some((l) => l.startsWith('Claude reads that email'))).toBe(true);
-    expect(lines.join(' ').length).toBeLessThan(5000); // fits a free ElevenLabs month
+    expect(lines.some((l) => l.startsWith('In the live version, Claude reads that email'))).toBe(true);
+    expect(lines.some((l) => l.startsWith('Claude has read that email'))).toBe(true);
+    expect(lines.join(' ').length).toBeLessThan(6000); // a few thousand credits voices everything
   });
 
   it('matches the browser id (sha256 hex, first 20)', async () => {
@@ -45,17 +45,35 @@ describe('guided demo voice', () => {
     expect(calls).toHaveLength(1);
   });
 
-  it('sends v4 only the settings it has, and retries plain if the shape is rejected', async () => {
+  it("uses the voice's own settings unless stability is set, and retries plain if the shape is rejected", async () => {
     const bodies: Record<string, unknown>[] = [];
-    const statuses = [422, 200];
+    const statuses = [422, 200, 200];
     const fetchImpl = (async (_url: string, init: RequestInit) => {
       bodies.push(JSON.parse(init.body as string));
       return new Response(new Uint8Array([1]), { status: statuses.shift()! });
     }) as unknown as typeof fetch;
     await synthesise({ ...cfg, modelId: 'eleven_v4' }, { text: 'Hello.', previous: 'Before.', next: 'After.' }, fetchImpl);
-    expect(bodies[0]).toMatchObject({ model_id: 'eleven_v4', voice_settings: { stability: 0.5, similarity_boost: 0.75 }, previous_text: 'Before.' });
-    expect(bodies[0]!.voice_settings).not.toHaveProperty('style');
+    expect(bodies[0]).toMatchObject({ model_id: 'eleven_v4', previous_text: 'Before.' });
+    expect(bodies[0]).not.toHaveProperty('voice_settings');
     expect(bodies[1]).toEqual({ text: 'Hello.', model_id: 'eleven_v4' });
+    await synthesise({ ...cfg, stability: 0.35 }, { text: 'Hi.' }, fetchImpl);
+    expect(bodies[2]).toMatchObject({ voice_settings: { stability: 0.35 } });
+    expect(voiceConfig({ ELEVENLABS_API_KEY: 'k', ELEVENLABS_STABILITY: '0.35' })?.stability).toBe(0.35);
+    expect(voiceConfig({ ELEVENLABS_API_KEY: 'k', ELEVENLABS_STABILITY: 'loud' })).not.toHaveProperty('stability');
+  });
+
+  it('auditions only shortlisted voices, on a real line of the script', async () => {
+    const calls: string[] = [];
+    const fetchImpl = (async (url: string) => {
+      calls.push(url);
+      return new Response(new Uint8Array([1]), { status: 200 });
+    }) as unknown as typeof fetch;
+    const store = new MemoryClipStore();
+    expect(await sampleFor('someone-else', { cfg, store, fetchImpl })).toEqual({ missing: 'not a voice on the shortlist' });
+    const out = await sampleFor(CANDIDATES[2]!.id, { cfg, store, fetchImpl });
+    expect('audio' in out).toBe(true);
+    expect(calls[0]).toContain(CANDIDATES[2]!.id);
+    expect(await sampleLine()).toMatch(/^It's aimed at UK businesses/);
   });
 
   it('re-records when the voice changes, and needs a key', async () => {

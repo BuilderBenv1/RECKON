@@ -43,7 +43,7 @@ describe('guided demo narration', () => {
     const s = await Session.create('demo', { claude: false });
     const beats = intro(buildView('t', s));
     expect(beats.filter((b) => b.extra)).toHaveLength(3);
-    expect(beats.filter((b) => !b.extra)[0]!.text).toMatch(/^Let's watch Reckon run one Monday morning/);
+    expect(beats.filter((b) => !b.extra)[0]!.text).toMatch(/^So, let's go through a Monday morning/);
   });
 
   it('says money the way a person would', () => {
@@ -58,21 +58,21 @@ describe('guided demo narration', () => {
       expect(beats.length, step).toBeGreaterThan(0);
       for (const b of beats) expect(b.text, step).not.toMatch(/undefined|NaN|null|\$\{/);
     }
-    expect(text(script, 'intro')).toContain('5,771 dollars to spare');
+    expect(text(script, 'intro')).toContain('5,771 dollars spare');
     expect(text(script, 'intro')).toContain('25 of the 26');
     expect(text(script, 'intro')).toContain('releases a 24,000-dollar milestone on the same job');
     expect(text(script, 'intro')).toContain('7,500-euro payment on Job 117');
     const late = text(script, 'after:delay_email');
-    expect(late).toContain('counting on that 9,000 dollars');
+    expect(late).toContain('relying on that 9,000 dollars');
     expect(late).toContain('3,229 dollars short');
     expect(late).toContain('180 dollars');
-    expect(late).toContain('closes the gap for 200 dollars');
-    expect(late).toContain('limit drops to 2,000 dollars');
+    expect(late).toContain('covers the gap for 200 dollars');
+    expect(late).toContain('limit has dropped to 2,000 dollars');
     expect(text(script, 'before:approve')).toContain('3,412.85 euros');
-    expect(text(script, 'after:customer_pays')).toContain('8,591 dollars to spare');
+    expect(text(script, 'after:customer_pays')).toContain('8,591 dollars spare');
     expect(text(script, 'after:split_reply')).toContain('1,600 pounds');
-    expect(text(script, 'after:chase')).toContain('Account closed');
-    expect(text(script, 'after:replay')).toContain('identical');
-    expect(text(script, 'tamper')).toContain('fails the hash check');
+    expect(text(script, 'after:chase')).toContain('because the account was closed');
+    expect(text(script, 'after:replay')).toContain('exactly the same decision');
+    expect(text(script, 'tamper')).toContain('gets caught');
   });
 });

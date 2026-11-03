@@ -83,6 +83,7 @@ export function Dashboard({ initialRun, info: initialInfo }: { initialRun: RunVi
     const n = new Narrator();
     n.voice = chosenVoice;
     n.human = info.voice;
+    n.unlock();
     narrator.current = n;
     setTour({ caption: 'Starting a fresh demo run…', paused: false, muted: false });
     document.body.classList.add('touring');

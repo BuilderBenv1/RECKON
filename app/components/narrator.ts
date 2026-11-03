@@ -55,10 +55,31 @@ export class Narrator {
   private interrupted = false;
   /** Use the voiced clips from /api/narration when the server has a voice. */
   human = false;
-  private clips = new Map<string, Promise<string | null>>();
+  private clips = new Map<string, Promise<AudioBuffer | null>>();
   private queue: Promise<unknown> = Promise.resolve();
-  private audio: HTMLAudioElement | null = null;
+  // One audio context for the whole tour, kept running with a silent source so the speakers
+  // (Bluetooth especially) never go to sleep between lines and clip the next first word.
+  private ctx: AudioContext | null = null;
+  private gain: GainNode | null = null;
+  private source: AudioBufferSourceNode | null = null;
   private endAudio: (() => void) | null = null;
+
+  /** Call straight from the click that starts the tour: browsers only allow audio after a gesture. */
+  unlock() {
+    if (!this.human || this.ctx || typeof window === 'undefined') return;
+    const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AC) return;
+    const ctx = new AC();
+    const gain = ctx.createGain();
+    gain.connect(ctx.destination);
+    const keepAlive = ctx.createConstantSource();
+    keepAlive.offset.value = 0;
+    keepAlive.connect(gain);
+    keepAlive.start();
+    void ctx.resume();
+    this.ctx = ctx;
+    this.gain = gain;
+  }
 
   private get synth(): SpeechSynthesis | null {
     return typeof window !== 'undefined' && 'speechSynthesis' in window ? window.speechSynthesis : null;
@@ -94,11 +115,12 @@ export class Narrator {
     }
   }
 
-  private async fetchClip(text: string): Promise<string | null> {
+  private async fetchClip(text: string): Promise<AudioBuffer | null> {
     try {
+      if (!this.ctx) return null;
       const res = await fetch(`/api/narration/${await lineId(text)}`);
       if (!res.ok) return null;
-      return URL.createObjectURL(await res.blob());
+      return await this.ctx.decodeAudioData(await res.arrayBuffer());
     } catch {
       return null;
     }
@@ -107,10 +129,10 @@ export class Narrator {
   async speak(text: string): Promise<void> {
     if (this.human) {
       this.prefetch([text]);
-      const url = await this.clips.get(text);
+      const clip = await this.clips.get(text);
       await this.gate();
-      if (url) {
-        await this.playClip(url);
+      if (clip) {
+        await this.playClip(clip);
         await this.gate();
         return;
       }
@@ -131,22 +153,24 @@ export class Narrator {
     await this.gate();
   }
 
-  private playClip(url: string): Promise<void> {
+  private playClip(clip: AudioBuffer): Promise<void> {
     return new Promise((resolve) => {
-      const a = new Audio(url);
-      a.muted = this.muted;
-      this.audio = a;
+      const ctx = this.ctx!;
+      const src = ctx.createBufferSource();
+      src.buffer = clip;
+      src.connect(this.gain!);
+      this.gain!.gain.value = this.muted ? 0 : 1;
+      this.source = src;
       const done = () => {
-        if (this.audio === a) {
-          this.audio = null;
+        if (this.source === src) {
+          this.source = null;
           this.endAudio = null;
         }
         resolve();
       };
       this.endAudio = done;
-      a.onended = done;
-      a.onerror = done;
-      a.play().catch(done);
+      src.onended = done;
+      src.start(ctx.currentTime + 0.12); // a breath before each line
     });
   }
 
@@ -175,8 +199,8 @@ export class Narrator {
 
   pause() {
     this.paused = true;
-    if (this.audio) {
-      this.audio.pause();
+    if (this.source) {
+      void this.ctx?.suspend();
       return;
     }
     this.interrupted = true;
@@ -185,17 +209,15 @@ export class Narrator {
 
   resume() {
     this.paused = false;
-    if (this.audio) void this.audio.play().catch(() => this.endAudio?.());
+    if (this.ctx?.state === 'suspended') void this.ctx.resume();
     this.wake?.();
     this.wake = null;
   }
 
   setMuted(m: boolean) {
     this.muted = m;
-    if (this.audio) {
-      this.audio.muted = m;
-      return;
-    }
+    if (this.gain) this.gain.gain.value = m ? 0 : 1;
+    if (this.source) return;
     if (m) {
       this.interrupted = true;
       this.synth?.cancel();
@@ -206,8 +228,14 @@ export class Narrator {
     this.cancelled = true;
     this.interrupted = true;
     this.synth?.cancel();
-    this.audio?.pause();
+    try {
+      this.source?.stop();
+    } catch {
+      /* already stopped */
+    }
     this.endAudio?.();
+    void this.ctx?.close().catch(() => undefined);
+    this.ctx = null;
     this.wake?.();
     this.wake = null;
   }

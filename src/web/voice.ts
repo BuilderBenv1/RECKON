@@ -17,12 +17,32 @@ export interface VoiceConfig {
   apiKey: string;
   voiceId: string;
   modelId: string;
+  /** Leave unset to use the voice's own tuned settings (the most natural on v4). */
+  stability?: number;
 }
+
+/** ElevenLabs' built-in voices, offered on /voices to audition against a real line of the script. */
+export const CANDIDATES: { id: string; name: string; accent: string }[] = [
+  { id: 'JBFqnCBsd6RMkjVDRZzb', name: 'George', accent: 'British, male' },
+  { id: 'onwK4e9ZLuTAKqWW03F9', name: 'Daniel', accent: 'British, male' },
+  { id: 'pFZP5JQG7iQjIQuC4Bku', name: 'Lily', accent: 'British, female' },
+  { id: 'Xb7hH8MSUJpSbSDYk0k2', name: 'Alice', accent: 'British, female' },
+  { id: 'IKne3meq5aSn9XLyUdCD', name: 'Charlie', accent: 'Australian, male' },
+  { id: 'nPczCjzI2devNBz1zQrb', name: 'Brian', accent: 'American, male' },
+  { id: 'XrExE9yKIg1WjnnlVkGX', name: 'Matilda', accent: 'American, female' },
+  { id: 'cgSgspJ2msm6clMCkdW9', name: 'Jessica', accent: 'American, female' },
+];
 
 export function voiceConfig(env: Record<string, string | undefined> = process.env): VoiceConfig | null {
   const apiKey = env.ELEVENLABS_API_KEY?.trim();
   if (!apiKey) return null;
-  return { apiKey, voiceId: env.ELEVENLABS_VOICE_ID?.trim() || DEFAULT_VOICE, modelId: env.ELEVENLABS_MODEL?.trim() || DEFAULT_MODEL };
+  const stability = Number(env.ELEVENLABS_STABILITY);
+  return {
+    apiKey,
+    voiceId: env.ELEVENLABS_VOICE_ID?.trim() || DEFAULT_VOICE,
+    modelId: env.ELEVENLABS_MODEL?.trim() || DEFAULT_MODEL,
+    ...(env.ELEVENLABS_STABILITY && stability >= 0 && stability <= 1 ? { stability } : {}),
+  };
 }
 
 let script: Promise<string[]> | null = null;
@@ -73,11 +93,10 @@ export const clipKey = (cfg: VoiceConfig, text: string) =>
  * newer models don't all accept the continuity fields, and a plain read beats no voice.
  */
 export async function synthesise(cfg: VoiceConfig, line: { text: string; previous?: string; next?: string }, fetchImpl: typeof fetch = fetch): Promise<ArrayBuffer> {
-  const v4 = /^eleven_v4/.test(cfg.modelId);
   const full = {
     text: line.text,
     model_id: cfg.modelId,
-    voice_settings: v4 ? { stability: 0.5, similarity_boost: 0.75 } : { stability: 0.5, similarity_boost: 0.75, style: 0.15, use_speaker_boost: true },
+    ...(cfg.stability !== undefined ? { voice_settings: { stability: cfg.stability, similarity_boost: 0.75 } } : {}),
     ...(line.previous ? { previous_text: line.previous } : {}),
     ...(line.next ? { next_text: line.next } : {}),
   };
@@ -161,6 +180,27 @@ export function clipStore(env: Record<string, string | undefined> = process.env)
 }
 
 export type ClipResult = { redirect: string } | { audio: ArrayBuffer } | { missing: string };
+
+/** The line every candidate voice reads on /voices. */
+export async function sampleLine(): Promise<string> {
+  return (await demoScript())[1]!;
+}
+
+/** A candidate voice reading the sample line, cached like any other clip. */
+export async function sampleFor(voiceId: string, deps: { cfg: VoiceConfig | null; store: ClipStore; fetchImpl?: typeof fetch }): Promise<ClipResult> {
+  if (!deps.cfg) return { missing: 'no voice configured' };
+  if (!CANDIDATES.some((c) => c.id === voiceId) && voiceId !== deps.cfg.voiceId) return { missing: 'not a voice on the shortlist' };
+  const cfg = { ...deps.cfg, voiceId };
+  const text = await sampleLine();
+  const key = clipKey(cfg, text);
+  const mem = deps.store.get?.(key);
+  if (mem) return { audio: mem };
+  const cached = await deps.store.url(key).catch(() => null);
+  if (cached) return { redirect: cached };
+  const audio = await synthesise(cfg, { text }, deps.fetchImpl);
+  await deps.store.put(key, audio).catch((err) => console.error('narration cache', (err as Error).message));
+  return { audio };
+}
 
 /** Cached clip if there is one; otherwise voice it now and cache it. */
 export async function clipFor(id: string, deps: { cfg: VoiceConfig | null; store: ClipStore; fetchImpl?: typeof fetch }): Promise<ClipResult> {
