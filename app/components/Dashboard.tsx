@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Action } from '../../src/demo/session';
 import type { DecisionView, RunView, StepView } from '../../src/web/view';
 import type { AppInfo } from '../../src/web/server';
+import { after, afterTamper, before, intro, outro, TOUR_STEPS, type Beat, type Focus } from '../../src/web/narration';
+import { Cancelled, englishVoices, Narrator, pickVoice } from './narrator';
 
 type Ccy = 'USD' | 'EUR' | 'GBP';
 
@@ -19,7 +21,7 @@ export function Dashboard({ initialRun, info: initialInfo }: { initialRun: RunVi
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const call = useCallback(async (url: string, body: unknown, label: string, quiet = false) => {
+  const call = useCallback(async (url: string, body: unknown, label: string, quiet = false): Promise<RunView | null> => {
     if (!quiet) {
       setBusy(label);
       setError(null);
@@ -30,8 +32,10 @@ export function Dashboard({ initialRun, info: initialInfo }: { initialRun: RunVi
       if (!res.ok || json.error) throw new Error(json.error ?? `Request failed (${res.status})`);
       if (json.run) setRun(json.run);
       if (json.info) setInfo(json.info);
+      return json.run ?? null;
     } catch (err) {
       if (!quiet) setError((err as Error).message);
+      return null;
     } finally {
       if (!quiet) setBusy(null);
     }
@@ -39,6 +43,115 @@ export function Dashboard({ initialRun, info: initialInfo }: { initialRun: RunVi
 
   const act = useCallback((action: Action, label: string) => call('/api/run/action', { action }, label), [call]);
   const start = useCallback((mode: 'demo' | 'live', code?: string) => call('/api/run', { mode, code }, `start-${mode}`), [call]);
+
+  // ---- guided demo: a narrator plays the story, presses each button and says what to notice
+  const [tour, setTour] = useState<{ caption: string; paused: boolean; muted: boolean } | null>(null);
+  const narrator = useRef<Narrator | null>(null);
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [voiceName, setVoiceName] = useState<string | null>(null);
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+    const load = () => setVoices(englishVoices());
+    load();
+    window.speechSynthesis.addEventListener('voiceschanged', load);
+    try {
+      setVoiceName(window.localStorage.getItem('reckon-voice'));
+    } catch {
+      /* storage unavailable: use the default voice */
+    }
+    return () => window.speechSynthesis.removeEventListener('voiceschanged', load);
+  }, []);
+  const chosenVoice = pickVoice(voices, voiceName);
+  useEffect(() => {
+    if (narrator.current) narrator.current.voice = chosenVoice;
+  }, [chosenVoice]);
+
+  const play = useCallback(async (n: Narrator, beats: Beat[]) => {
+    for (const b of beats) {
+      await n.gate();
+      await new Promise((r) => setTimeout(r, 120)); // let React paint the new state first
+      spotlight(b.focus);
+      setTour((t) => (t ? { ...t, caption: b.text } : t));
+      await n.speak(b.text);
+      await n.wait(350);
+    }
+  }, []);
+
+  const runTour = useCallback(async () => {
+    narrator.current?.stop();
+    const n = new Narrator();
+    n.voice = chosenVoice;
+    narrator.current = n;
+    setTour({ caption: 'Starting a fresh demo run…', paused: false, muted: false });
+    document.body.classList.add('touring');
+    try {
+      let v = await start('demo');
+      if (!v) return;
+      await play(n, intro(v));
+      for (const step of TOUR_STEPS) {
+        await play(n, before(step, v));
+        const action = v.steps.find((s) => s.id === step)?.action;
+        if (!action) break;
+        await press(n, `[data-tour-step="${step}"]`);
+        const prev = v;
+        const next = await act(action, `step-${step}`);
+        if (!next) return;
+        v = next;
+        await play(n, after(step, prev, v));
+      }
+      await press(n, '[data-tour-step="tamper"]');
+      const tampered = await act({ type: 'replay', decisionId: 'convert:EUR', tamper: true }, 'replay-convert:EUR-true');
+      if (tampered) {
+        v = tampered;
+        await play(n, afterTamper(v));
+      }
+      await play(n, outro(v));
+    } catch (err) {
+      if (!(err instanceof Cancelled)) setError((err as Error).message);
+    } finally {
+      n.stop();
+      if (narrator.current === n) {
+        narrator.current = null;
+        setTour(null);
+        spotlight(null);
+        document.body.classList.remove('touring');
+      }
+    }
+  }, [act, start, play, chosenVoice]);
+
+  useEffect(() => () => narrator.current?.stop(), []);
+
+  const tourBar = tour && (
+    <TourBar
+      caption={tour.caption}
+      paused={tour.paused}
+      muted={tour.muted}
+      voices={voices}
+      voice={chosenVoice?.name ?? ''}
+      onVoice={(name) => {
+        setVoiceName(name);
+        try {
+          window.localStorage.setItem('reckon-voice', name);
+        } catch {
+          /* fine: the choice just isn't remembered */
+        }
+      }}
+      onPause={() => {
+        const n = narrator.current;
+        if (!n) return;
+        if (n.isPaused) n.resume();
+        else n.pause();
+        setTour((t) => (t ? { ...t, paused: n.isPaused } : t));
+      }}
+      onMute={() => {
+        const n = narrator.current;
+        if (!n) return;
+        n.setMuted(!n.muted);
+        setTour((t) => (t ? { ...t, muted: n.muted } : t));
+      }}
+      onStop={() => narrator.current?.stop()}
+    />
+  );
 
   // Live runs: while the customer link is unpaid, check it every few seconds (the webhook usually wins).
   const waitingOnLink = run?.mode === 'live' && run.steps.find((s) => s.id === 'customer_pays')?.state === 'next' && run.links.some((l) => l.status === 'sent');
@@ -54,7 +167,13 @@ export function Dashboard({ initialRun, info: initialInfo }: { initialRun: RunVi
     return () => clearInterval(t);
   }, [waitingOnLink, call]);
 
-  if (!run) return <Landing info={info} busy={busy} error={error} onStart={start} />;
+  if (!run)
+    return (
+      <>
+        <Landing info={info} busy={busy || (tour ? 'tour' : null)} error={error} onStart={start} onTour={runTour} />
+        {tourBar}
+      </>
+    );
 
   return (
     <div className="shell">
@@ -68,7 +187,12 @@ export function Dashboard({ initialRun, info: initialInfo }: { initialRun: RunVi
             <span className="mode-dot" aria-hidden />
             {run.mode === 'live' ? 'Live Airwallex sandbox' : 'Demo: simulated Airwallex'}
           </span>
-          <button className="btn btn-quiet" disabled={!!busy} onClick={() => start(run.mode === 'live' ? 'live' : 'demo')}>
+          {run.mode === 'demo' && !tour && (
+            <button className="btn btn-agent" disabled={!!busy} onClick={runTour}>
+              Guided demo
+            </button>
+          )}
+          <button className="btn btn-quiet" disabled={!!busy || !!tour} onClick={() => start(run.mode === 'live' ? 'live' : 'demo')}>
             Start again
           </button>
         </div>
@@ -108,13 +232,94 @@ export function Dashboard({ initialRun, info: initialInfo }: { initialRun: RunVi
           Synthetic data only. <a href={GITHUB}>Source on GitHub</a>
         </span>
       </footer>
+      {tourBar}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- guided demo
+
+function spotlight(focus: Focus | null) {
+  document.querySelectorAll('.tour-focus').forEach((el) => el.classList.remove('tour-focus'));
+  if (!focus) return;
+  const el = document.querySelector(`[data-tour="${focus}"]`);
+  if (!el) return;
+  el.classList.add('tour-focus');
+  el.scrollIntoView({ behavior: 'smooth', block: focus === 'steps' || focus === 'proof' ? 'nearest' : 'center' });
+}
+
+/** Shows the narrator pressing a button, so viewers see what triggered the change. */
+async function press(n: Narrator, selector: string) {
+  await n.gate();
+  const el = document.querySelector<HTMLElement>(selector);
+  if (!el) return;
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  el.classList.add('tour-press');
+  await n.wait(900);
+  el.classList.remove('tour-press');
+}
+
+function TourBar(p: {
+  caption: string;
+  paused: boolean;
+  muted: boolean;
+  voices: SpeechSynthesisVoice[];
+  voice: string;
+  onVoice: (name: string) => void;
+  onPause: () => void;
+  onMute: () => void;
+  onStop: () => void;
+}) {
+  return (
+    <div className="tourbar" role="region" aria-label="Guided demo narration">
+      <div className="tourbar-head">
+        <span className="tourbar-who">
+          <span className="tourbar-dot" data-paused={p.paused} aria-hidden />
+          Reckon, narrating
+        </span>
+        <div className="tourbar-controls">
+          {p.voices.length > 1 && (
+            <select className="tourbar-voice" aria-label="Narrator voice" value={p.voice} onChange={(e) => p.onVoice(e.target.value)}>
+              {p.voices.map((v) => (
+                <option key={v.name} value={v.name}>
+                  {v.name.replace(/^Microsoft /, '').replace(/ Online \(Natural\)/, ' (natural)')}
+                </option>
+              ))}
+            </select>
+          )}
+          <button className="tourbar-btn" onClick={p.onMute}>
+            {p.muted ? 'Sound on' : 'Mute'}
+          </button>
+          <button className="tourbar-btn" onClick={p.onPause}>
+            {p.paused ? 'Resume' : 'Pause'}
+          </button>
+          <button className="tourbar-btn" onClick={p.onStop}>
+            Stop
+          </button>
+        </div>
+      </div>
+      <p className="tourbar-caption" aria-live="polite">
+        {p.caption}
+      </p>
     </div>
   );
 }
 
 // ---------------------------------------------------------------- landing
 
-function Landing({ info, busy, error, onStart }: { info: AppInfo; busy: string | null; error: string | null; onStart: (m: 'demo' | 'live', code?: string) => void }) {
+function Landing({
+  info,
+  busy,
+  error,
+  onStart,
+  onTour,
+}: {
+  info: AppInfo;
+  busy: string | null;
+  error: string | null;
+  onStart: (m: 'demo' | 'live', code?: string) => void;
+  onTour: () => void;
+}) {
   const [code, setCode] = useState('');
   return (
     <div className="shell">
@@ -132,8 +337,11 @@ function Landing({ info, busy, error, onStart }: { info: AppInfo; busy: string |
           from its inputs.
         </p>
         <div className="landing-actions">
-          <button className="btn btn-primary" disabled={!!busy} onClick={() => onStart('demo')}>
-            {busy === 'start-demo' ? 'Starting…' : 'Start the demo'}
+          <button className="btn btn-primary" disabled={!!busy} onClick={onTour}>
+            {busy === 'tour' ? 'Starting…' : 'Watch the guided demo'}
+          </button>
+          <button className="btn" disabled={!!busy} onClick={() => onStart('demo')}>
+            {busy === 'start-demo' ? 'Starting…' : 'Try it yourself'}
           </button>
           {info.liveAvailable && (
             <>
@@ -188,7 +396,7 @@ function Hero({ run }: { run: RunView }) {
     : `This week is covered, with ${whole(-s.gapUSD)} to spare above the reserve.`;
 
   return (
-    <section className="hero" aria-labelledby="hero-title">
+    <section className="hero" data-tour="hero" aria-labelledby="hero-title">
       <h1 id="hero-title">{headline}</h1>
       <p className="hero-lede">
         {short
@@ -250,7 +458,7 @@ function Hero({ run }: { run: RunView }) {
 function Brief({ run, busy, onApprove }: { run: RunView; busy: string | null; onApprove: (id: string) => void }) {
   const approvable = (d: DecisionView) => d.kind !== 'hold' && d.kind !== 'escalate_gap';
   return (
-    <section aria-labelledby="brief-title">
+    <section data-tour="brief" aria-labelledby="brief-title">
       <div className="section-head">
         <h2 id="brief-title">The MD&apos;s brief</h2>
         <span className="section-note">One paragraph, and only what needs a person</span>
@@ -274,7 +482,7 @@ function Brief({ run, busy, onApprove }: { run: RunView; busy: string | null; on
                   )}
                 </div>
                 {approvable(d) ? (
-                  <button className="btn btn-primary" disabled={!!busy} onClick={() => onApprove(d.id)}>
+                  <button className="btn btn-primary" data-tour-step={d.kind === 'convert' ? 'approve' : undefined} disabled={!!busy} onClick={() => onApprove(d.id)}>
                     {busy === `approve-${d.id}` ? 'Approving…' : 'Approve exactly this'}
                   </button>
                 ) : (
@@ -300,7 +508,7 @@ function Changes({ run }: { run: RunView }) {
   };
   const executed = new Set(last.executed);
   return (
-    <section aria-labelledby="changes-title">
+    <section data-tour="changes" aria-labelledby="changes-title">
       <div className="section-head">
         <h2 id="changes-title">What just happened</h2>
         <span className="section-note">Only the decisions the new facts moved</span>
@@ -368,7 +576,7 @@ function statusChip(d: DecisionView, run: RunView) {
 function Decisions({ run, busy, onReplay }: { run: RunView; busy: string | null; onReplay: (id: string) => void }) {
   const rows = [...run.decisions, ...run.doneToday.map((d) => ({ ...d, done: true }))];
   return (
-    <section aria-labelledby="decisions-title">
+    <section data-tour="decisions" aria-labelledby="decisions-title">
       <div className="section-head">
         <h2 id="decisions-title">Decisions</h2>
         <span className="section-note">Money, limits and order are code. Each one replays from its stored inputs.</span>
@@ -412,7 +620,7 @@ function Decisions({ run, busy, onReplay }: { run: RunView; busy: string | null;
 
 function Payments({ run }: { run: RunView }) {
   return (
-    <section aria-labelledby="pay-title">
+    <section data-tour="payments" aria-labelledby="pay-title">
       <div className="section-head">
         <h2 id="pay-title">Money moved</h2>
         <span className="section-note">{run.mode === 'live' ? 'Real Airwallex sandbox transfers' : 'Simulated transfers'}</span>
@@ -459,7 +667,7 @@ function Payments({ run }: { run: RunView }) {
 
 function Outbox({ run }: { run: RunView }) {
   return (
-    <section aria-labelledby="outbox-title">
+    <section data-tour="outbox" aria-labelledby="outbox-title">
       <div className="section-head">
         <h2 id="outbox-title">Messages sent</h2>
       </div>
@@ -488,7 +696,7 @@ function Outbox({ run }: { run: RunView }) {
 
 function Recon({ run }: { run: RunView }) {
   return (
-    <section aria-labelledby="recon-title">
+    <section data-tour="recon" aria-labelledby="recon-title">
       <div className="section-head">
         <h2 id="recon-title">Overnight bank lines</h2>
         <span className="section-note">
@@ -512,7 +720,7 @@ function Recon({ run }: { run: RunView }) {
 
 function Signals({ run }: { run: RunView }) {
   return (
-    <section aria-labelledby="signals-title">
+    <section data-tour="signals" aria-labelledby="signals-title">
       <div className="section-head">
         <h2 id="signals-title">What the emails said</h2>
         <span className="section-note">{run.claude ? 'Read by Claude, checked against the book' : 'Read from fixtures in this demo'}</span>
@@ -601,7 +809,7 @@ const BUTTON: Partial<Record<StepView['id'], string>> = {
 
 function Steps({ run, busy, onAct }: { run: RunView; busy: string | null; onAct: (a: Action, label: string) => void }) {
   return (
-    <section aria-labelledby="steps-title">
+    <section data-tour="steps" aria-labelledby="steps-title">
       <div className="section-head">
         <h2 id="steps-title">The story, one step at a time</h2>
       </div>
@@ -618,7 +826,7 @@ function Steps({ run, busy, onAct }: { run: RunView; busy: string | null; onAct:
                   </a>
                 )}
                 {s.action && (
-                  <button className={s.link ? 'btn' : 'btn btn-agent'} disabled={!!busy} onClick={() => onAct(s.action!, `step-${s.id}`)}>
+                  <button className={s.link ? 'btn' : 'btn btn-agent'} data-tour-step={s.id === 'approve' ? undefined : s.id} disabled={!!busy} onClick={() => onAct(s.action!, `step-${s.id}`)}>
                     {busy === `step-${s.id}` ? 'Working…' : s.link ? 'Check payment now' : (BUTTON[s.id] ?? 'Go')}
                   </button>
                 )}
@@ -635,17 +843,17 @@ function Steps({ run, busy, onAct }: { run: RunView; busy: string | null; onAct:
 function Proof({ run, busy, onReplay }: { run: RunView; busy: string | null; onReplay: (id: string, tamper: boolean) => void }) {
   const target = [...run.doneToday, ...run.decisions].find((d) => d.kind === 'convert') ?? run.decisions[0];
   return (
-    <section className="proof" aria-labelledby="proof-title">
+    <section className="proof" data-tour="proof" aria-labelledby="proof-title">
       <div className="section-head">
         <h2 id="proof-title">Replay</h2>
       </div>
       <p className="muted">Re-runs the planner on a decision&apos;s stored inputs. A tampered copy fails the hash check.</p>
       {target && (
         <div className="step-actions">
-          <button className="btn" disabled={!!busy} onClick={() => onReplay(target.id, false)}>
+          <button className="btn" data-tour-step="replay-proof" disabled={!!busy} onClick={() => onReplay(target.id, false)}>
             Replay {target.label.toLowerCase()}
           </button>
-          <button className="btn btn-quiet" disabled={!!busy} onClick={() => onReplay(target.id, true)}>
+          <button className="btn btn-quiet" data-tour-step="tamper" disabled={!!busy} onClick={() => onReplay(target.id, true)}>
             Try a tampered copy
           </button>
         </div>

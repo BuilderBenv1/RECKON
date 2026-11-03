@@ -238,3 +238,35 @@ input.field { width: 100%; padding: 8px 10px; border: 1px solid var(--line); bor
 .form { display: grid; gap: 8px; }
 
 footer.foot { margin-top: 56px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--ink-3); font-size: 13px; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+
+/* ---------- guided demo ---------- */
+
+body.touring { padding-bottom: 170px; }
+.tour-focus {
+  outline: 2px solid var(--agent); outline-offset: 8px; border-radius: var(--radius-sm);
+  box-shadow: 0 0 0 10px var(--agent-soft); transition: outline-color 0.3s, box-shadow 0.3s;
+}
+.tour-press { outline: 3px solid var(--agent); outline-offset: 3px; transform: scale(0.97); transition: transform 0.15s; }
+
+.tourbar {
+  position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 50;
+  width: min(880px, calc(100vw - 32px)); padding: 14px 18px 16px; border-radius: 14px;
+  background: #0f1820; color: #eef3f7; box-shadow: 0 12px 36px rgba(0, 0, 0, 0.28);
+  display: grid; gap: 8px;
+}
+.tourbar-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.tourbar-who { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: #8fd9dc; }
+.tourbar-dot { width: 8px; height: 8px; border-radius: 50%; background: #4ec1c6; animation: tour-pulse 1.4s ease-in-out infinite; }
+.tourbar-dot[data-paused='true'] { animation: none; background: #7f8c99; }
+@keyframes tour-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .tourbar-dot { animation: none; } }
+.tourbar-controls { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.tourbar-btn, .tourbar-voice {
+  background: rgba(255, 255, 255, 0.08); color: #eef3f7; border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 6px; padding: 4px 10px; font-size: 13px; cursor: pointer;
+}
+.tourbar-voice { max-width: 220px; }
+.tourbar-voice option { color: #15202b; }
+.tourbar-btn:hover { background: rgba(255, 255, 255, 0.16); }
+.tourbar-caption { margin: 0; font-size: 17px; line-height: 1.5; min-height: 3em; }
+@media (max-width: 600px) { .tourbar-caption { font-size: 15px; } }

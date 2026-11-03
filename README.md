@@ -12,6 +12,8 @@ Every decision can be replayed from its stored inputs to the identical answer.
 
 The hosted app walks through the whole story one step at a time: the MD's brief, approvals bound to exact terms, what each new fact changed, every decision with a replay button, and the money that moved. Demo runs use a simulated Airwallex, so anyone can click through; live runs make real Airwallex sandbox calls and receive webhooks.
 
+**Watch the guided demo** plays the same story by itself: a narrator presses each button, highlights what changed and says what to notice. It speaks with the browser's own voices (no keys; pick a voice in the bar), and every number it says is read from the run as it stands, never typed into a script (`src/web/narration.ts`, checked by `test/narration.test.ts`).
+
 ```
 npm install
 npm run dev            # http://localhost:3000
