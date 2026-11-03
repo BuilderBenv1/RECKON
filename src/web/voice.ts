@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { Session } from '../demo/session.js';
-import { after, afterTamper, before, intro, outro, presenterName, TOUR_STEPS } from './narration.js';
+import { after, afterTamper, before, intro, outro, presenterName, TOUR_STEPS, type Opts } from './narration.js';
 import { buildView, type RunView } from './view.js';
 
 // Human narration for the guided demo. Each line is voiced once by ElevenLabs and cached in
@@ -47,30 +47,41 @@ export function voiceConfig(env: Record<string, string | undefined> = process.en
 
 let script: Promise<string[]> | null = null;
 
-/** Every line the guided demo can say, in order. Includes the Claude-on wording of the lines that differ. */
+/**
+ * Every line the guided demo can say, in order: the default script (names Airwallex), then event
+ * mode (?handoff: generic bank, presenter's name), each with the Claude-on wording where it differs.
+ */
 export function demoScript(): Promise<string[]> {
   return (script ??= (async () => {
     const s = await Session.create('demo', { claude: false });
-    let v: RunView = buildView('script', s);
-    const lines: string[] = [];
-    const add = (beats: { text: string }[]) => beats.forEach((b) => lines.push(b.text));
-    const both = (f: (x: RunView) => { text: string }[], x: RunView) => {
-      add(f(x));
-      add(f({ ...x, claude: true }).filter((b) => !lines.includes(b.text)));
-    };
-    both(intro, v);
+    const morning = buildView('script', s);
+    const steps: { step: (typeof TOUR_STEPS)[number]; before: RunView; after: RunView }[] = [];
+    let v = morning;
     for (const step of TOUR_STEPS) {
-      add(before(step, v));
       const prev = v;
       await s.act(v.steps.find((x) => x.id === step)!.action!);
       v = buildView('script', s);
-      both((x) => after(step, { ...prev, claude: x.claude }, x), v);
+      steps.push({ step, before: prev, after: v });
     }
     await s.act({ type: 'replay', decisionId: 'convert:EUR', tamper: true });
-    v = buildView('script', s);
-    add(afterTamper(v));
-    add(outro(v));
-    if (presenterName(process.env.RECKON_PRESENTER)) add(outro(v, process.env.RECKON_PRESENTER));
+    const end = buildView('script', s);
+
+    const presenter = presenterName(process.env.RECKON_PRESENTER);
+    const variants: Opts[] = [{}, { airwallex: false, presenter }, { airwallex: false, presenter: null }];
+    const lines: string[] = [];
+    const add = (beats: { text: string }[]) => beats.forEach((b) => lines.push(b.text));
+    for (const o of variants) {
+      for (const claude of [false, true]) {
+        const c = (x: RunView): RunView => ({ ...x, claude });
+        add(intro(c(morning), o));
+        for (const st of steps) {
+          add(before(st.step, c(st.before), o));
+          add(after(st.step, c(st.before), c(st.after), o));
+        }
+        add(afterTamper(c(end), o));
+        add(outro(c(end), o));
+      }
+    }
     return [...new Set(lines)];
   })());
 }

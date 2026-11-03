@@ -1,49 +1,32 @@
 import { describe, expect, it } from 'vitest';
 import { Session } from '../src/demo/session.js';
 import { buildView, type RunView } from '../src/web/view.js';
-import { after, afterTamper, before, intro, outro, presenterName, say, spoken, TOUR_STEPS, type Beat } from '../src/web/narration.js';
+import { after, afterTamper, before, intro, outro, presenterName, say, spoken, TOUR_STEPS, type Beat, type Opts } from '../src/web/narration.js';
 
-async function tour() {
+async function tour(o: Opts = {}) {
   const s = await Session.create('demo', { claude: false });
   let v: RunView = buildView('t', s);
-  const script: { step: string; beats: Beat[] }[] = [{ step: 'intro', beats: intro(v) }];
+  const script: { step: string; beats: Beat[] }[] = [{ step: 'intro', beats: intro(v, o) }];
   for (const step of TOUR_STEPS) {
-    script.push({ step: `before:${step}`, beats: before(step, v) });
-    const action = v.steps.find((x) => x.id === step)!.action!;
+    script.push({ step: `before:${step}`, beats: before(step, v, o) });
     const prev = v;
-    await s.act(action);
+    await s.act(v.steps.find((x) => x.id === step)!.action!);
     v = buildView('t', s);
-    script.push({ step: `after:${step}`, beats: after(step, prev, v) });
+    script.push({ step: `after:${step}`, beats: after(step, prev, v, o) });
   }
   await s.act({ type: 'replay', decisionId: 'convert:EUR', tamper: true });
   v = buildView('t', s);
-  script.push({ step: 'tamper', beats: afterTamper(v) }, { step: 'outro', beats: outro(v) });
+  script.push({ step: 'tamper', beats: afterTamper(v, o) }, { step: 'outro', beats: outro(v, o) });
   return script;
 }
 
 const text = (script: Awaited<ReturnType<typeof tour>>, step: string) => script.find((x) => x.step === step)!.beats.map((b) => b.text).join(' ');
+const all = (script: Awaited<ReturnType<typeof tour>>) => script.flatMap((x) => x.beats.map((b) => b.text)).join(' ');
 
 describe('guided demo narration', () => {
   it('says company names without legal suffixes', () => {
     expect(spoken('Rheinfracht Logistik GmbH')).toBe('Rheinfracht Logistik');
     expect(spoken('Calder & Finch LLP')).toBe('Calder & Finch');
-    expect(spoken('Job 117 has no quoted budget, and Klimatech Anlagen GmbH is a new payee')).toBe('Job 117 has no quoted budget, and Klimatech Anlagen is a new payee');
-  });
-
-  it('hands over to a presenter only by name, and only a speakable one', async () => {
-    const script = await tour();
-    expect(text(script, 'outro')).toMatch(/Thanks for watching\.$/);
-    expect(presenterName('Ben')).toBe('Ben');
-    expect(presenterName('Ben & Kieron')).toBe('Ben & Kieron');
-    expect(presenterName('<script>x</script>')).toBe('scriptxscript');
-    expect(presenterName('  ')).toBeNull();
-  });
-
-  it('has a short cut that drops only the longer introduction', async () => {
-    const s = await Session.create('demo', { claude: false });
-    const beats = intro(buildView('t', s));
-    expect(beats.filter((b) => b.extra)).toHaveLength(3);
-    expect(beats.filter((b) => !b.extra)[0]!.text).toMatch(/^So, let's go through a Monday morning/);
   });
 
   it('says money the way a person would', () => {
@@ -56,23 +39,49 @@ describe('guided demo narration', () => {
     const script = await tour();
     for (const { step, beats } of script) {
       expect(beats.length, step).toBeGreaterThan(0);
-      for (const b of beats) expect(b.text, step).not.toMatch(/undefined|NaN|null|\$\{/);
+      for (const b of beats) expect(b.text, step).not.toMatch(/undefined|NaN|null|\$\{|\. so|,,/);
     }
-    expect(text(script, 'intro')).toContain('5,771 dollars spare');
+    expect(text(script, 'intro')).toContain('5,771 dollars to spare');
     expect(text(script, 'intro')).toContain('25 of the 26');
-    expect(text(script, 'intro')).toContain('releases a 24,000-dollar milestone on the same job');
-    expect(text(script, 'intro')).toContain('7,500-euro payment on Job 117');
+    expect(text(script, 'intro')).toContain('5,400-euro bill is first, because paying it unlocks 24,000 dollars on the same job');
+    expect(text(script, 'intro')).toContain("One payment, for 7,500 euros, is on hold. That job has no budget yet and it's a new supplier, so");
     const late = text(script, 'after:delay_email');
-    expect(late).toContain('relying on that 9,000 dollars');
+    expect(late).toContain('counting on that 9,000 dollars');
     expect(late).toContain('3,229 dollars short');
-    expect(late).toContain('180 dollars');
     expect(late).toContain('covers the gap for 200 dollars');
-    expect(late).toContain('limit has dropped to 2,000 dollars');
-    expect(text(script, 'before:approve')).toContain('3,412.85 euros');
-    expect(text(script, 'after:customer_pays')).toContain('8,591 dollars spare');
-    expect(text(script, 'after:split_reply')).toContain('1,600 pounds');
+    expect(text(script, 'after:run_0900')).toContain("That's 4 jobs done");
+    expect(text(script, 'after:approve')).toContain('pays Rheinfracht Logistik straight away');
+    expect(text(script, 'after:customer_pays')).toContain('covered again');
     expect(text(script, 'after:chase')).toContain('because the account was closed');
-    expect(text(script, 'after:replay')).toContain('exactly the same decision');
-    expect(text(script, 'tamper')).toContain('gets caught');
+    expect(text(script, 'after:replay')).toContain('exactly the same answer');
+    expect(text(script, 'tamper')).toContain('spots it straight away');
+  });
+
+  it('names Airwallex by default but never mentions the hackathon', async () => {
+    const words = all(await tour());
+    expect(words).toContain('Airwallex');
+    expect(words).not.toMatch(/hackathon/i);
+    expect(text(await tour(), 'outro')).toMatch(/Thanks for watching\.$/);
+  });
+
+  it('event mode leaves Airwallex out, credits the presenter and hands over', async () => {
+    const script = await tour({ airwallex: false, presenter: 'Ben' });
+    expect(all(script)).not.toMatch(/airwallex|hackathon/i);
+    expect(text(script, 'intro')).toContain("I'm going to show you Reckon, something Ben has just built.");
+    expect(text(script, 'outro')).toMatch(/I'll hand you over to Ben\.$/);
+    expect(text(script, 'after:chase')).toContain('checks with the bank first');
+  });
+
+  it('keeps names speakable', () => {
+    expect(presenterName('Ben & Kieron')).toBe('Ben & Kieron');
+    expect(presenterName('<script>x</script>')).toBe('scriptxscript');
+    expect(presenterName('  ')).toBeNull();
+  });
+
+  it('has a short cut that drops only the longer introduction', async () => {
+    const s = await Session.create('demo', { claude: false });
+    const beats = intro(buildView('t', s));
+    expect(beats.filter((b) => b.extra)).toHaveLength(3);
+    expect(beats.filter((b) => !b.extra)[0]!.text).toMatch(/^Let's see it run on a Monday morning/);
   });
 });

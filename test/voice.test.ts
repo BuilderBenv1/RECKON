@@ -8,8 +8,9 @@ describe('guided demo voice', () => {
     const lines = await demoScript();
     expect(lines.length).toBeGreaterThan(25);
     expect(new Set(lines.map(lineId)).size).toBe(lines.length);
-    expect(lines.some((l) => l.startsWith('In the live version, Claude reads that email'))).toBe(true);
-    expect(lines.some((l) => l.startsWith('Claude has read that email'))).toBe(true);
+    expect(lines.some((l) => l.startsWith('In the live version, the AI reads the email'))).toBe(true);
+    expect(lines.some((l) => l.startsWith('The AI reads the email'))).toBe(true);
+    expect(lines.some((l) => l.includes('checks with the bank first'))).toBe(true); // event mode
     expect(lines.join(' ').length).toBeLessThan(6000); // a few thousand credits voices everything
   });
 
@@ -73,7 +74,7 @@ describe('guided demo voice', () => {
     const out = await sampleFor(CANDIDATES[2]!.id, { cfg, store, fetchImpl });
     expect('audio' in out).toBe(true);
     expect(calls[0]).toContain(CANDIDATES[2]!.id);
-    expect(await sampleLine()).toMatch(/^It's aimed at UK businesses/);
+    expect(await sampleLine()).toMatch(/^It's for businesses that work job by job/);
   });
 
   it('re-records when the voice changes, and needs a key', async () => {

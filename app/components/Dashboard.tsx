@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Action } from '../../src/demo/session';
 import type { DecisionView, RunView, StepView } from '../../src/web/view';
 import type { AppInfo } from '../../src/web/server';
-import { after, afterTamper, before, intro, outro, TOUR_STEPS, type Beat, type Focus } from '../../src/web/narration';
+import { after, afterTamper, before, intro, outro, TOUR_STEPS, type Beat, type Focus, type Opts } from '../../src/web/narration';
 import { Cancelled, englishVoices, Narrator, pickVoice } from './narrator';
 
 type Ccy = 'USD' | 'EUR' | 'GBP';
@@ -87,17 +87,18 @@ export function Dashboard({ initialRun, info: initialInfo }: { initialRun: RunVi
     narrator.current = n;
     setTour({ caption: 'Starting a fresh demo run…', paused: false, muted: false });
     document.body.classList.add('touring');
-    // ?short skips the longer spoken introduction; ?handoff ends by handing over to the presenter.
+    // ?short skips the longer spoken introduction. ?handoff is event mode: no Airwallex, "Ben has
+    // just built", and it hands over to the presenter at the end.
     const q = new URLSearchParams(window.location.search);
     const short = q.has('short');
-    const presenter = q.has('handoff') ? info.presenter : null;
+    const o: Opts = q.has('handoff') ? { airwallex: false, presenter: info.presenter } : {};
     try {
       let v = await start('demo');
       if (!v) return;
-      await play(n, intro(v).filter((b) => !short || !b.extra));
+      await play(n, intro(v, o).filter((b) => !short || !b.extra));
       for (const step of TOUR_STEPS) {
-        n.prefetch(before(step, v).map((b) => b.text));
-        await play(n, before(step, v));
+        n.prefetch(before(step, v, o).map((b) => b.text));
+        await play(n, before(step, v, o));
         const action = v.steps.find((s) => s.id === step)?.action;
         if (!action) break;
         await press(n, `[data-tour-step="${step}"]`);
@@ -105,15 +106,15 @@ export function Dashboard({ initialRun, info: initialInfo }: { initialRun: RunVi
         const next = await act(action, `step-${step}`);
         if (!next) return;
         v = next;
-        await play(n, after(step, prev, v));
+        await play(n, after(step, prev, v, o));
       }
       await press(n, '[data-tour-step="tamper"]');
       const tampered = await act({ type: 'replay', decisionId: 'convert:EUR', tamper: true }, 'replay-convert:EUR-true');
       if (tampered) {
         v = tampered;
-        await play(n, afterTamper(v));
+        await play(n, afterTamper(v, o));
       }
-      await play(n, outro(v, presenter));
+      await play(n, outro(v, o));
     } catch (err) {
       if (!(err instanceof Cancelled)) setError((err as Error).message);
     } finally {
