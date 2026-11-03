@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clipFor, clipKey, demoScript, findLine, lineId, MemoryClipStore, SupabaseClipStore, voiceConfig } from '../src/web/voice.js';
+import { clipFor, clipKey, demoScript, findLine, lineId, MemoryClipStore, SupabaseClipStore, synthesise, voiceConfig } from '../src/web/voice.js';
 
 const cfg = { apiKey: 'test-key', voiceId: 'voice1', modelId: 'model1' };
 
@@ -45,10 +45,23 @@ describe('guided demo voice', () => {
     expect(calls).toHaveLength(1);
   });
 
+  it('sends v4 only the settings it has, and retries plain if the shape is rejected', async () => {
+    const bodies: Record<string, unknown>[] = [];
+    const statuses = [422, 200];
+    const fetchImpl = (async (_url: string, init: RequestInit) => {
+      bodies.push(JSON.parse(init.body as string));
+      return new Response(new Uint8Array([1]), { status: statuses.shift()! });
+    }) as unknown as typeof fetch;
+    await synthesise({ ...cfg, modelId: 'eleven_v4' }, { text: 'Hello.', previous: 'Before.', next: 'After.' }, fetchImpl);
+    expect(bodies[0]).toMatchObject({ model_id: 'eleven_v4', voice_settings: { stability: 0.5, similarity_boost: 0.75 }, previous_text: 'Before.' });
+    expect(bodies[0]!.voice_settings).not.toHaveProperty('style');
+    expect(bodies[1]).toEqual({ text: 'Hello.', model_id: 'eleven_v4' });
+  });
+
   it('re-records when the voice changes, and needs a key', async () => {
     expect(clipKey(cfg, 'x')).not.toBe(clipKey({ ...cfg, voiceId: 'voice2' }, 'x'));
     expect(voiceConfig({})).toBeNull();
-    expect(voiceConfig({ ELEVENLABS_API_KEY: ' k ' })).toMatchObject({ apiKey: 'k', voiceId: 'JBFqnCBsd6RMkjVDRZzb' });
+    expect(voiceConfig({ ELEVENLABS_API_KEY: ' k ' })).toMatchObject({ apiKey: 'k', voiceId: 'JBFqnCBsd6RMkjVDRZzb', modelId: 'eleven_v4' });
     const id = lineId((await demoScript())[0]!);
     expect(await clipFor(id, { cfg: null, store: new MemoryClipStore() })).toEqual({ missing: 'no voice configured' });
   });

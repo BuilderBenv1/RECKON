@@ -8,7 +8,7 @@ import { buildView, type RunView } from './view.js';
 // say can be voiced: the allowlist is the demo script, rebuilt here from a fresh demo run.
 
 export const DEFAULT_VOICE = 'JBFqnCBsd6RMkjVDRZzb'; // ElevenLabs "George": warm, British
-export const DEFAULT_MODEL = 'eleven_multilingual_v2';
+export const DEFAULT_MODEL = 'eleven_v4'; // ElevenLabs' highest-quality model; eleven_multilingual_v2 also works
 
 /** The id the browser asks for. Same algorithm in narrator.ts: sha256 hex, first 20. */
 export const lineId = (text: string) => createHash('sha256').update(text).digest('hex').slice(0, 20);
@@ -66,18 +66,31 @@ export async function findLine(id: string): Promise<{ text: string; previous?: s
 export const clipKey = (cfg: VoiceConfig, text: string) =>
   createHash('sha256').update(`${cfg.voiceId}|${cfg.modelId}|${text}`).digest('hex').slice(0, 32);
 
+/**
+ * Voices one line. v4 has no Style or Speed settings, so it gets stability and similarity only.
+ * If the API rejects the request shape (400/422), retry once with just the text and model:
+ * newer models don't all accept the continuity fields, and a plain read beats no voice.
+ */
 export async function synthesise(cfg: VoiceConfig, line: { text: string; previous?: string; next?: string }, fetchImpl: typeof fetch = fetch): Promise<ArrayBuffer> {
-  const res = await fetchImpl(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(cfg.voiceId)}?output_format=mp3_44100_128`, {
-    method: 'POST',
-    headers: { 'xi-api-key': cfg.apiKey, 'Content-Type': 'application/json', Accept: 'audio/mpeg' },
-    body: JSON.stringify({
-      text: line.text,
-      model_id: cfg.modelId,
-      voice_settings: { stability: 0.5, similarity_boost: 0.75, style: 0.15, use_speaker_boost: true },
-      ...(line.previous ? { previous_text: line.previous } : {}),
-      ...(line.next ? { next_text: line.next } : {}),
-    }),
-  });
+  const v4 = /^eleven_v4/.test(cfg.modelId);
+  const full = {
+    text: line.text,
+    model_id: cfg.modelId,
+    voice_settings: v4 ? { stability: 0.5, similarity_boost: 0.75 } : { stability: 0.5, similarity_boost: 0.75, style: 0.15, use_speaker_boost: true },
+    ...(line.previous ? { previous_text: line.previous } : {}),
+    ...(line.next ? { next_text: line.next } : {}),
+  };
+  const call = (body: object) =>
+    fetchImpl(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(cfg.voiceId)}?output_format=mp3_44100_128`, {
+      method: 'POST',
+      headers: { 'xi-api-key': cfg.apiKey, 'Content-Type': 'application/json', Accept: 'audio/mpeg' },
+      body: JSON.stringify(body),
+    });
+  let res = await call(full);
+  if (res.status === 400 || res.status === 422) {
+    console.error('ElevenLabs rejected the full request, retrying plain:', (await res.text()).slice(0, 200));
+    res = await call({ text: line.text, model_id: cfg.modelId });
+  }
   if (!res.ok) throw new Error(`ElevenLabs failed (${res.status}): ${(await res.text()).slice(0, 200)}`);
   return res.arrayBuffer();
 }
