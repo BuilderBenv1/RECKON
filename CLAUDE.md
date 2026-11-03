@@ -35,5 +35,6 @@ Needs: working demo, video under 5 minutes, this repo with setup instructions.
 
 ## Next up
 
-- Deploy to Vercel with Supabase; add the Airwallex webhook; run a live run from the hosted page
+- Deployed at https://reckon-henna.vercel.app with Supabase (demo run passes end to end, 3 Nov 2026). A daily Vercel cron hits `/api/cron/keepalive` so the free Supabase project doesn't pause.
+- Add the Airwallex webhook; run a live run from the hosted page
 - Record the video
