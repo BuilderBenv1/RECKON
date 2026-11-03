@@ -18,6 +18,8 @@ export interface AppInfo {
   liveAvailable: boolean;
   liveNeedsCode: boolean;
   persistent: boolean;
+  /** ElevenLabs is configured, so the guided demo can use a human voice. */
+  voice: boolean;
 }
 
 export function appInfo(): AppInfo {
@@ -25,6 +27,7 @@ export function appInfo(): AppInfo {
     liveAvailable: liveConfigured(),
     liveNeedsCode: !!process.env.RECKON_LIVE_CODE,
     persistent: getStore().persistent,
+    voice: !!process.env.ELEVENLABS_API_KEY?.trim(),
   };
 }
 

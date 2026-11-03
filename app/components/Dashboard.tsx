@@ -67,13 +67,14 @@ export function Dashboard({ initialRun, info: initialInfo }: { initialRun: RunVi
   }, [chosenVoice]);
 
   const play = useCallback(async (n: Narrator, beats: Beat[]) => {
+    n.prefetch(beats.map((b) => b.text));
     for (const b of beats) {
       await n.gate();
       await new Promise((r) => setTimeout(r, 120)); // let React paint the new state first
       spotlight(b.focus);
       setTour((t) => (t ? { ...t, caption: b.text } : t));
       await n.speak(b.text);
-      await n.wait(350);
+      await n.wait(250);
     }
   }, []);
 
@@ -81,6 +82,7 @@ export function Dashboard({ initialRun, info: initialInfo }: { initialRun: RunVi
     narrator.current?.stop();
     const n = new Narrator();
     n.voice = chosenVoice;
+    n.human = info.voice;
     narrator.current = n;
     setTour({ caption: 'Starting a fresh demo run…', paused: false, muted: false });
     document.body.classList.add('touring');
@@ -89,6 +91,7 @@ export function Dashboard({ initialRun, info: initialInfo }: { initialRun: RunVi
       if (!v) return;
       await play(n, intro(v));
       for (const step of TOUR_STEPS) {
+        n.prefetch(before(step, v).map((b) => b.text));
         await play(n, before(step, v));
         const action = v.steps.find((s) => s.id === step)?.action;
         if (!action) break;
@@ -117,7 +120,7 @@ export function Dashboard({ initialRun, info: initialInfo }: { initialRun: RunVi
         document.body.classList.remove('touring');
       }
     }
-  }, [act, start, play, chosenVoice]);
+  }, [act, start, play, chosenVoice, info.voice]);
 
   useEffect(() => () => narrator.current?.stop(), []);
 
@@ -126,7 +129,7 @@ export function Dashboard({ initialRun, info: initialInfo }: { initialRun: RunVi
       caption={tour.caption}
       paused={tour.paused}
       muted={tour.muted}
-      voices={voices}
+      voices={info.voice ? [] : voices}
       voice={chosenVoice?.name ?? ''}
       onVoice={(name) => {
         setVoiceName(name);
@@ -255,7 +258,7 @@ async function press(n: Narrator, selector: string) {
   if (!el) return;
   el.scrollIntoView({ behavior: 'smooth', block: 'center' });
   el.classList.add('tour-press');
-  await n.wait(900);
+  await n.wait(700);
   el.classList.remove('tour-press');
 }
 
@@ -275,7 +278,7 @@ function TourBar(p: {
       <div className="tourbar-head">
         <span className="tourbar-who">
           <span className="tourbar-dot" data-paused={p.paused} aria-hidden />
-          Reckon, narrating
+          Guided demo
         </span>
         <div className="tourbar-controls">
           {p.voices.length > 1 && (
