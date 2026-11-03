@@ -8,6 +8,8 @@ export type Focus = 'hero' | 'brief' | 'changes' | 'decisions' | 'payments' | 'o
 export interface Beat {
   focus: Focus;
   text: string;
+  /** Part of the longer spoken introduction; skipped in the short cut (?short). */
+  extra?: true;
 }
 
 export type TourStep = 'delay_email' | 'run_0900' | 'approve' | 'customer_pays' | 'split_reply' | 'chase' | 'replay';
@@ -42,10 +44,28 @@ export function intro(v: RunView): Beat[] {
   const beats: Beat[] = [
     {
       focus: 'hero',
+      extra: true,
+      text: "Hi. I'm an AI narrator, and I'm going to walk you through a project called Reckon. It was built for the Airwallex Agentic Banking Hackathon, and it's an AI agent that looks after a company's cash.",
+    },
+    {
+      focus: 'hero',
+      extra: true,
       text:
-        "This is Reckon, a treasury agent for UK project businesses, built on Airwallex. " +
-        (v.mode === 'demo' ? 'In this demo Airwallex is simulated; live mode runs the same steps for real. ' : 'This run is talking to the real Airwallex sandbox. ') +
-        "Here's one Monday morning.",
+        "Here's the problem it solves. Lots of UK businesses work project by project: fit-outs, installations, building work. Customers pay in stages, suppliers want paying, often in different currencies, and some weeks there isn't quite enough cash to go round. " +
+        'So every morning, someone sits with a spreadsheet and decides who gets paid, and who waits.',
+    },
+    {
+      focus: 'hero',
+      extra: true,
+      text:
+        "Reckon does that job. Every morning it reads the finance team's own spreadsheet and the bank, works out what's due, pays what it safely can through Airwallex, and only asks the managing director about the things that really need a person. " +
+        "And one rule matters more than any other. The AI never decides the money. Amounts, limits and approvals are all ordinary code. The AI reads emails and writes messages, and that's all.",
+    },
+    {
+      focus: 'hero',
+      text:
+        "Let's watch Reckon run one Monday morning. " +
+        (v.mode === 'demo' ? 'In this demo, Airwallex is simulated. Live mode runs exactly the same steps for real.' : 'This run is talking to the real Airwallex sandbox.'),
     },
   ];
   beats.push({
@@ -231,14 +251,21 @@ export function afterTamper(v: RunView): Beat[] {
   ];
 }
 
-export function outro(v: RunView): Beat[] {
+/** A presenter's name as it can be spoken: letters, spaces, hyphens, apostrophes and "&" only. */
+export const presenterName = (raw: string | null | undefined): string | null => {
+  const n = (raw ?? '').replace(/[^\p{L} '&-]/gu, '').replace(/\s+/g, ' ').trim().slice(0, 40);
+  return n || null;
+};
+
+export function outro(_v: RunView, presenter?: string | null): Beat[] {
+  const name = presenterName(presenter);
   return [
     {
       focus: 'hero',
       text:
-        "So that's Reckon. It ranks payments by what they unlock, holds spend with no budget, prices every way to close a gap, and proves every decision. " +
-        'The money logic is all code. The AI just reads emails and drafts messages, and every number it writes is checked. ' +
-        'Thanks for watching.',
+        "So that's Reckon. It ranks payments by what they unlock, holds spend with no budget, prices every way to close a gap, and can prove every decision it made. " +
+        'The money logic is all code, and every number the AI writes is checked. ' +
+        (name ? `Thanks for watching. Now, over to ${name}.` : 'Thanks for watching.'),
     },
   ];
 }

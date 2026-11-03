@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Session } from '../src/demo/session.js';
 import { buildView, type RunView } from '../src/web/view.js';
-import { after, afterTamper, before, intro, outro, say, spoken, TOUR_STEPS, type Beat } from '../src/web/narration.js';
+import { after, afterTamper, before, intro, outro, presenterName, say, spoken, TOUR_STEPS, type Beat } from '../src/web/narration.js';
 
 async function tour() {
   const s = await Session.create('demo', { claude: false });
@@ -28,6 +28,22 @@ describe('guided demo narration', () => {
     expect(spoken('Rheinfracht Logistik GmbH')).toBe('Rheinfracht Logistik');
     expect(spoken('Calder & Finch LLP')).toBe('Calder & Finch');
     expect(spoken('Job 117 has no quoted budget, and Klimatech Anlagen GmbH is a new payee')).toBe('Job 117 has no quoted budget, and Klimatech Anlagen is a new payee');
+  });
+
+  it('hands over to a presenter only by name, and only a speakable one', async () => {
+    const script = await tour();
+    expect(text(script, 'outro')).toMatch(/Thanks for watching\.$/);
+    expect(presenterName('Ben')).toBe('Ben');
+    expect(presenterName('Ben & Kieron')).toBe('Ben & Kieron');
+    expect(presenterName('<script>x</script>')).toBe('scriptxscript');
+    expect(presenterName('  ')).toBeNull();
+  });
+
+  it('has a short cut that drops only the longer introduction', async () => {
+    const s = await Session.create('demo', { claude: false });
+    const beats = intro(buildView('t', s));
+    expect(beats.filter((b) => b.extra)).toHaveLength(3);
+    expect(beats.filter((b) => !b.extra)[0]!.text).toMatch(/^Let's watch Reckon run one Monday morning/);
   });
 
   it('says money the way a person would', () => {

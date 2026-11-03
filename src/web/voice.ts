@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { Session } from '../demo/session.js';
-import { after, afterTamper, before, intro, outro, TOUR_STEPS } from './narration.js';
+import { after, afterTamper, before, intro, outro, presenterName, TOUR_STEPS } from './narration.js';
 import { buildView, type RunView } from './view.js';
 
 // Human narration for the guided demo. Each line is voiced once by ElevenLabs and cached in
@@ -50,6 +50,7 @@ export function demoScript(): Promise<string[]> {
     v = buildView('script', s);
     add(afterTamper(v));
     add(outro(v));
+    if (presenterName(process.env.RECKON_PRESENTER)) add(outro(v, process.env.RECKON_PRESENTER));
     return [...new Set(lines)];
   })());
 }

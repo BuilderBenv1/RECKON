@@ -86,10 +86,14 @@ export function Dashboard({ initialRun, info: initialInfo }: { initialRun: RunVi
     narrator.current = n;
     setTour({ caption: 'Starting a fresh demo run…', paused: false, muted: false });
     document.body.classList.add('touring');
+    // ?short skips the longer spoken introduction; ?handoff ends by handing over to the presenter.
+    const q = new URLSearchParams(window.location.search);
+    const short = q.has('short');
+    const presenter = q.has('handoff') ? info.presenter : null;
     try {
       let v = await start('demo');
       if (!v) return;
-      await play(n, intro(v));
+      await play(n, intro(v).filter((b) => !short || !b.extra));
       for (const step of TOUR_STEPS) {
         n.prefetch(before(step, v).map((b) => b.text));
         await play(n, before(step, v));
@@ -108,7 +112,7 @@ export function Dashboard({ initialRun, info: initialInfo }: { initialRun: RunVi
         v = tampered;
         await play(n, afterTamper(v));
       }
-      await play(n, outro(v));
+      await play(n, outro(v, presenter));
     } catch (err) {
       if (!(err instanceof Cancelled)) setError((err as Error).message);
     } finally {
@@ -120,7 +124,7 @@ export function Dashboard({ initialRun, info: initialInfo }: { initialRun: RunVi
         document.body.classList.remove('touring');
       }
     }
-  }, [act, start, play, chosenVoice, info.voice]);
+  }, [act, start, play, chosenVoice, info.voice, info.presenter]);
 
   useEffect(() => () => narrator.current?.stop(), []);
 

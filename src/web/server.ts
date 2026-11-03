@@ -2,6 +2,7 @@ import { liveConfigured, Session, type Action, type Mode, type SessionDeps } fro
 import { getStore } from '../store/runs.js';
 import { withRun } from '../store/withRun.js';
 import { buildView, type RunView } from './view.js';
+import { presenterName } from './narration.js';
 
 export const RUN_COOKIE = 'reckon_run';
 
@@ -20,6 +21,8 @@ export interface AppInfo {
   persistent: boolean;
   /** ElevenLabs is configured, so the guided demo can use a human voice. */
   voice: boolean;
+  /** Who the guided demo hands over to at the end, when the page is opened with ?handoff. */
+  presenter: string | null;
 }
 
 export function appInfo(): AppInfo {
@@ -28,6 +31,7 @@ export function appInfo(): AppInfo {
     liveNeedsCode: !!process.env.RECKON_LIVE_CODE,
     persistent: getStore().persistent,
     voice: !!process.env.ELEVENLABS_API_KEY?.trim(),
+    presenter: presenterName(process.env.RECKON_PRESENTER),
   };
 }
 
