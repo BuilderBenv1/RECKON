@@ -227,3 +227,22 @@ export async function clipFor(id: string, deps: { cfg: VoiceConfig | null; store
   await deps.store.put(key, audio).catch((err) => console.error('narration cache', (err as Error).message));
   return { audio };
 }
+
+/**
+ * Live runs say different numbers (real sandbox rates), so their lines can't be on the demo
+ * allowlist. They're voiced on request instead, but only for whoever holds a live run, and a
+ * live run needs RECKON_LIVE_CODE to start. Still cached, so a re-run costs nothing.
+ */
+export async function liveClip(text: string, deps: { cfg: VoiceConfig | null; store: ClipStore; fetchImpl?: typeof fetch }): Promise<ClipResult> {
+  if (!deps.cfg) return { missing: 'no voice configured' };
+  const t = text.trim();
+  if (!t || t.length > 700) return { missing: 'not a narration line' };
+  const key = clipKey(deps.cfg, t);
+  const mem = deps.store.get?.(key);
+  if (mem) return { audio: mem };
+  const cached = await deps.store.url(key).catch(() => null);
+  if (cached) return { redirect: cached };
+  const audio = await synthesise(deps.cfg, { text: t }, deps.fetchImpl);
+  await deps.store.put(key, audio).catch((err) => console.error('narration cache', (err as Error).message));
+  return { audio };
+}

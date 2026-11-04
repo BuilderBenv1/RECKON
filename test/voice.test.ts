@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clipFor, clipKey, demoScript, findLine, lineId, MemoryClipStore, sampleFor, sampleLine, CANDIDATES, SupabaseClipStore, synthesise, voiceConfig } from '../src/web/voice.js';
+import { clipFor, clipKey, demoScript, findLine, lineId, MemoryClipStore, liveClip, sampleFor, sampleLine, CANDIDATES, SupabaseClipStore, synthesise, voiceConfig } from '../src/web/voice.js';
 
 const cfg = { apiKey: 'test-key', voiceId: 'voice1', modelId: 'model1' };
 
@@ -97,5 +97,20 @@ describe('guided demo voice', () => {
     expect(out).toEqual({ redirect: expect.stringMatching(/^https:\/\/x\.supabase\.co\/storage\/v1\/object\/public\/narration\/[0-9a-f]{32}\.mp3$/) });
     expect(seen).toHaveLength(1);
     expect(seen[0]).toMatch(/^HEAD /);
+  });
+
+  it('voices live-run lines on request, within limits, and caches them', async () => {
+    let calls = 0;
+    const fetchImpl = (async () => {
+      calls++;
+      return new Response(new Uint8Array([1]), { status: 200 });
+    }) as unknown as typeof fetch;
+    const store = new MemoryClipStore();
+    expect(await liveClip('x'.repeat(701), { cfg, store, fetchImpl })).toEqual({ missing: 'not a narration line' });
+    expect(await liveClip('   ', { cfg, store, fetchImpl })).toEqual({ missing: 'not a narration line' });
+    expect(await liveClip('The week is 3,180 dollars short.', { cfg: null, store, fetchImpl })).toEqual({ missing: 'no voice configured' });
+    await liveClip('The week is 3,180 dollars short.', { cfg, store, fetchImpl });
+    await liveClip('The week is 3,180 dollars short.', { cfg, store, fetchImpl });
+    expect(calls).toBe(1);
   });
 });

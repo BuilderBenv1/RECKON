@@ -45,7 +45,7 @@ export function Dashboard({ initialRun, info: initialInfo }: { initialRun: RunVi
   const start = useCallback((mode: 'demo' | 'live', code?: string) => call('/api/run', { mode, code }, `start-${mode}`), [call]);
 
   // ---- guided demo: a narrator plays the story, presses each button and says what to notice
-  const [tour, setTour] = useState<{ caption: string; paused: boolean; muted: boolean } | null>(null);
+  const [tour, setTour] = useState<{ caption: string; paused: boolean; muted: boolean; link?: string | null } | null>(null);
   const narrator = useRef<Narrator | null>(null);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [voiceName, setVoiceName] = useState<string | null>(null);
@@ -78,14 +78,18 @@ export function Dashboard({ initialRun, info: initialInfo }: { initialRun: RunVi
     }
   }, []);
 
-  const runTour = useCallback(async () => {
+  /** The guided demo. With an access code it runs on the real Airwallex sandbox instead. */
+  const runTour = useCallback(async (liveCode?: string) => {
+    const live = liveCode !== undefined;
     narrator.current?.stop();
     const n = new Narrator();
     n.voice = chosenVoice;
     n.human = info.voice;
+    n.live = live;
     n.unlock();
     narrator.current = n;
-    setTour({ caption: 'Starting a fresh demo run…', paused: false, muted: false });
+    setTour({ caption: live ? 'Starting a live run on the Airwallex sandbox…' : 'Starting a fresh demo run…', paused: false, muted: false });
+    const working = () => live && setTour((t) => (t ? { ...t, caption: 'Working on the Airwallex sandbox…' } : t));
     document.body.classList.add('touring');
     // ?short skips the longer spoken introduction. ?handoff is event mode: no Airwallex, "Ben has
     // just built", and it hands over to the presenter at the end.
@@ -93,7 +97,7 @@ export function Dashboard({ initialRun, info: initialInfo }: { initialRun: RunVi
     const short = q.has('short');
     const o: Opts = q.has('handoff') ? { airwallex: false, presenter: info.presenter } : {};
     try {
-      let v = await start('demo');
+      let v = await start(live ? 'live' : 'demo', liveCode);
       if (!v) return;
       await play(n, intro(v, o).filter((b) => !short || !b.extra));
       for (const step of TOUR_STEPS) {
@@ -101,14 +105,32 @@ export function Dashboard({ initialRun, info: initialInfo }: { initialRun: RunVi
         await play(n, before(step, v, o));
         const action = v.steps.find((s) => s.id === step)?.action;
         if (!action) break;
-        await press(n, `[data-tour-step="${step}"]`);
         const prev = v;
-        const next = await act(action, `step-${step}`);
-        if (!next) return;
-        v = next;
+        if (live && step === 'customer_pays') {
+          // A person pays the real link with the test card; Reckon notices by itself (webhook, or this check).
+          const link = v.steps.find((s) => s.id === step)?.link ?? v.links[0]?.url ?? null;
+          setTour((t) => (t ? { ...t, link, caption: 'Waiting for the payment. Open the link and pay with test card 4035 5010 0000 0008, any future expiry and CVC.' } : t));
+          const deadline = Date.now() + 10 * 60_000;
+          let paid: RunView | null = null;
+          while (!paid && Date.now() < deadline) {
+            await n.wait(5000);
+            const cur = await call('/api/run/action', { action: { type: 'check_links' } }, 'poll', true);
+            if (cur?.steps.find((s) => s.id === step)?.state === 'done') paid = cur;
+          }
+          setTour((t) => (t ? { ...t, link: null } : t));
+          if (!paid) throw new Error('No payment after 10 minutes, so the guided run has stopped. The run is still open.');
+          v = paid;
+        } else {
+          await press(n, `[data-tour-step="${step}"]`);
+          working();
+          const next = await act(action, `step-${step}`);
+          if (!next) return;
+          v = next;
+        }
         await play(n, after(step, prev, v, o));
       }
       await press(n, '[data-tour-step="tamper"]');
+      working();
       const tampered = await act({ type: 'replay', decisionId: 'convert:EUR', tamper: true }, 'replay-convert:EUR-true');
       if (tampered) {
         v = tampered;
@@ -126,13 +148,14 @@ export function Dashboard({ initialRun, info: initialInfo }: { initialRun: RunVi
         document.body.classList.remove('touring');
       }
     }
-  }, [act, start, play, chosenVoice, info.voice, info.presenter]);
+  }, [act, call, start, play, chosenVoice, info.voice, info.presenter]);
 
   useEffect(() => () => narrator.current?.stop(), []);
 
   const tourBar = tour && (
     <TourBar
       caption={tour.caption}
+      link={tour.link ?? null}
       paused={tour.paused}
       muted={tour.muted}
       voices={info.voice ? [] : voices}
@@ -179,7 +202,7 @@ export function Dashboard({ initialRun, info: initialInfo }: { initialRun: RunVi
   if (!run)
     return (
       <>
-        <Landing info={info} busy={busy || (tour ? 'tour' : null)} error={error} onStart={start} onTour={runTour} />
+        <Landing info={info} busy={busy || (tour ? 'tour' : null)} error={error} onStart={start} onTour={() => runTour()} onLiveTour={(code) => runTour(code)} />
         {tourBar}
       </>
     );
@@ -197,7 +220,7 @@ export function Dashboard({ initialRun, info: initialInfo }: { initialRun: RunVi
             {run.mode === 'live' ? 'Live Airwallex sandbox' : 'Demo: simulated Airwallex'}
           </span>
           {run.mode === 'demo' && !tour && (
-            <button className="btn btn-agent" disabled={!!busy} onClick={runTour}>
+            <button className="btn btn-agent" disabled={!!busy} onClick={() => runTour()}>
               Guided demo
             </button>
           )}
@@ -270,6 +293,7 @@ async function press(n: Narrator, selector: string) {
 
 function TourBar(p: {
   caption: string;
+  link: string | null;
   paused: boolean;
   muted: boolean;
   voices: SpeechSynthesisVoice[];
@@ -310,6 +334,11 @@ function TourBar(p: {
       <p className="tourbar-caption" aria-live="polite">
         {p.caption}
       </p>
+      {p.link && (
+        <a className="btn btn-agent tourbar-link" href={p.link} target="_blank" rel="noreferrer">
+          Open the Airwallex payment link
+        </a>
+      )}
     </div>
   );
 }
@@ -322,12 +351,14 @@ function Landing({
   error,
   onStart,
   onTour,
+  onLiveTour,
 }: {
   info: AppInfo;
   busy: string | null;
   error: string | null;
   onStart: (m: 'demo' | 'live', code?: string) => void;
   onTour: () => void;
+  onLiveTour: (code: string) => void;
 }) {
   const [code, setCode] = useState('');
   return (
@@ -359,6 +390,9 @@ function Landing({
               )}
               <button className="btn" disabled={!!busy} onClick={() => onStart('live', code)}>
                 {busy === 'start-live' ? 'Starting…' : 'Start a live sandbox run'}
+              </button>
+              <button className="btn btn-agent" disabled={!!busy} onClick={() => onLiveTour(code)}>
+                Guided live run
               </button>
             </>
           )}

@@ -55,6 +55,8 @@ export class Narrator {
   private interrupted = false;
   /** Use the voiced clips from /api/narration when the server has a voice. */
   human = false;
+  /** A guided live run: its lines carry real sandbox numbers, so they're voiced on request. */
+  live = false;
   private clips = new Map<string, Promise<AudioBuffer | null>>();
   private queue: Promise<unknown> = Promise.resolve();
   // One audio context for the whole tour, kept running with a silent source so the speakers
@@ -118,7 +120,9 @@ export class Narrator {
   private async fetchClip(text: string): Promise<AudioBuffer | null> {
     try {
       if (!this.ctx) return null;
-      const res = await fetch(`/api/narration/${await lineId(text)}`);
+      const res = this.live
+        ? await fetch('/api/narration/live', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) })
+        : await fetch(`/api/narration/${await lineId(text)}`);
       if (!res.ok) return null;
       return await this.ctx.decodeAudioData(await res.arrayBuffer());
     } catch {

@@ -74,7 +74,13 @@ export function intro(v: RunView, o: Opts = {}): Beat[] {
       focus: 'hero',
       text:
         "Let's see it run on a Monday morning. " +
-        (v.mode === 'demo' ? (brand(o) ? 'This is a demo, so Airwallex is simulated and no real money moves.' : 'This is a demo, so no real money moves.') : 'This one is using a real test bank account.'),
+        (v.mode === 'demo'
+          ? brand(o)
+            ? 'This is a demo, so Airwallex is simulated and no real money moves.'
+            : 'This is a demo, so no real money moves.'
+          : brand(o)
+            ? 'This run is on the real Airwallex sandbox, so every payment, currency exchange and payment link you see is real, just with test money.'
+            : 'This run uses a real test bank account, so every payment you see really happens, just with test money.'),
     },
   ];
   beats.push({
@@ -120,6 +126,8 @@ export function before(step: TourStep, v: RunView, o: Opts = {}): Beat[] {
     case 'approve':
       return [{ focus: 'brief', text: 'The boss approves it with one click. That approval only covers that exact amount.' }];
     case 'customer_pays':
+      if (v.mode === 'live')
+        return [{ focus: 'payments', text: `This is a real ${brand(o) ? 'Airwallex ' : ''}payment link. Let's pay it with a test card, and Reckon will spot the payment by itself.` }];
       return [{ focus: 'payments', text: brand(o) ? 'Now the customer pays early, through the Airwallex payment link.' : 'Now the customer pays early, through the payment link.' }];
     case 'split_reply':
       return [{ focus: 'steps', text: 'The supplier agrees to split their bill.' }];

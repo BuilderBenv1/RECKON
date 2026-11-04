@@ -276,3 +276,5 @@ body.touring { padding-bottom: 170px; }
 .voice-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
 .voice-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; padding: 12px 0; border-bottom: 1px solid var(--line); }
 .voice-row audio { width: min(320px, 100%); }
+
+.tourbar-link { justify-self: start; }
