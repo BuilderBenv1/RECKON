@@ -194,7 +194,8 @@ export type ClipResult = { redirect: string } | { audio: ArrayBuffer } | { missi
 
 /** The line every candidate voice reads on /voices. */
 export async function sampleLine(): Promise<string> {
-  return (await demoScript())[1]!;
+  const lines = await demoScript();
+  return lines.find((l) => l.startsWith("It's for businesses")) ?? lines[1]!;
 }
 
 /** A candidate voice reading the sample line, cached like any other clip. */

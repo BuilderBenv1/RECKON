@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Action } from '../../src/demo/session';
 import type { DecisionView, RunView, StepView } from '../../src/web/view';
 import type { AppInfo } from '../../src/web/server';
-import { after, afterTamper, before, intro, outro, TOUR_STEPS, type Beat, type Focus, type Opts } from '../../src/web/narration';
+import { after, afterTamper, before, intro, introCut, outro, TOUR_STEPS, type Beat, type Focus, type Opts } from '../../src/web/narration';
 import { Cancelled, englishVoices, Narrator, pickVoice } from './narrator';
 
 type Ccy = 'USD' | 'EUR' | 'GBP';
@@ -94,12 +94,12 @@ export function Dashboard({ initialRun, info: initialInfo }: { initialRun: RunVi
     // ?short skips the longer spoken introduction. ?handoff is event mode: no Airwallex, "Ben has
     // just built", and it hands over to the presenter at the end.
     const q = new URLSearchParams(window.location.search);
-    const short = q.has('short');
+    const cut = q.has('short') ? 'short' : q.has('video') ? 'video' : 'full';
     const o: Opts = q.has('handoff') ? { airwallex: false, presenter: info.presenter } : {};
     try {
       let v = await start(live ? 'live' : 'demo', liveCode);
       if (!v) return;
-      await play(n, intro(v, o).filter((b) => !short || !b.extra));
+      await play(n, introCut(intro(v, o), cut));
       for (const step of TOUR_STEPS) {
         n.prefetch(before(step, v, o).map((b) => b.text));
         await play(n, before(step, v, o));

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Session } from '../src/demo/session.js';
 import { buildView, type RunView } from '../src/web/view.js';
-import { after, afterTamper, before, intro, outro, presenterName, say, spoken, TOUR_STEPS, type Beat, type Opts } from '../src/web/narration.js';
+import { after, afterTamper, before, intro, introCut, outro, presenterName, say, spoken, TOUR_STEPS, type Beat, type Opts } from '../src/web/narration.js';
 
 async function tour(o: Opts = {}) {
   const s = await Session.create('demo', { claude: false });
@@ -78,10 +78,18 @@ describe('guided demo narration', () => {
     expect(presenterName('  ')).toBeNull();
   });
 
-  it('has a short cut that drops only the longer introduction', async () => {
+  it('cuts the introduction three ways', async () => {
     const s = await Session.create('demo', { claude: false });
     const beats = intro(buildView('t', s));
-    expect(beats.filter((b) => b.extra)).toHaveLength(3);
-    expect(beats.filter((b) => !b.extra)[0]!.text).toMatch(/^Let's see it run on a Monday morning/);
+    expect(introCut(beats, 'full').filter((b) => b.extra).map((b) => b.part)).toEqual(['greet', 'origin', 'problem', 'what']);
+    expect(introCut(beats, 'short')[0]!.text).toMatch(/^Let's see it run on a Monday morning/);
+    expect(introCut(beats, 'video').filter((b) => b.extra).map((b) => b.part)).toEqual(['greet', 'origin', 'what']);
+  });
+
+  it('tells where Reckon came from without naming the business or its figures', async () => {
+    const s = await Session.create('demo', { claude: false });
+    const origin = intro(buildView('t', s)).find((b) => b.part === 'origin')!.text;
+    expect(origin).toMatch(/^Reckon came out of a real job\. Ben built a cash-flow dashboard for a UK project business/);
+    expect(origin).not.toMatch(/\d|£|%/);
   });
 });

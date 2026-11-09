@@ -10,6 +10,8 @@ export interface Beat {
   text: string;
   /** Part of the longer spoken introduction; skipped in the short cut (?short). */
   extra?: true;
+  /** Which introduction beat this is, so a cut can pick (?video keeps greet, origin and what). */
+  part?: 'greet' | 'origin' | 'problem' | 'what';
 }
 
 export type TourStep = 'delay_email' | 'run_0900' | 'approve' | 'customer_pays' | 'split_reply' | 'chase' | 'replay';
@@ -48,6 +50,15 @@ export interface Opts {
   presenter?: string | null;
 }
 const brand = (o: Opts) => o.airwallex !== false;
+/** Who built Reckon, for the origin line. */
+const BUILDER = 'Ben';
+
+/** Which introduction beats a cut keeps: full (all), short (none), video (greet, origin, what). */
+export function introCut(beats: Beat[], cut: 'full' | 'short' | 'video'): Beat[] {
+  if (cut === 'short') return beats.filter((b) => !b.extra);
+  if (cut === 'video') return beats.filter((b) => b.part !== 'problem');
+  return beats;
+}
 
 export function intro(v: RunView, o: Opts = {}): Beat[] {
   const s = v.summary;
@@ -56,6 +67,7 @@ export function intro(v: RunView, o: Opts = {}): Beat[] {
     {
       focus: 'hero',
       extra: true,
+      part: 'greet',
       text:
         `Hi, I'm an AI voice, and I'm going to show you Reckon${name ? `, something ${name} has just built` : ''}. It's an AI agent that looks after a company's cash` +
         (brand(o) ? ', and it runs on Airwallex.' : '.'),
@@ -63,12 +75,24 @@ export function intro(v: RunView, o: Opts = {}): Beat[] {
     {
       focus: 'hero',
       extra: true,
+      part: 'origin',
+      text:
+        `Reckon came out of a real job. ${BUILDER} built a cash-flow dashboard for a UK project business, and three things from that job shaped it. ` +
+        'A lot of their jobs had no quoted budget. The finance team ran everything from their own spreadsheet, and a new screen just doubled their work. ' +
+        'And money came in and went out in stages, with milestones, held invoices and payment plans. ' +
+        "So Reckon works from the team's own spreadsheet, won't pay spend that has no budget, and plans around every stage.",
+    },
+    {
+      focus: 'hero',
+      extra: true,
+      part: 'problem',
       text: "It's for businesses that work job by job, like builders and installers. Money comes in and goes out at different times, and some weeks there isn't enough to pay everyone. Normally someone sits with a spreadsheet every morning and decides who gets paid.",
     },
     {
       focus: 'hero',
       extra: true,
-      text: "Reckon does that job for them. It pays what it safely can, and only asks the boss when a person needs to decide. The AI never decides how much to pay anyone. That's all fixed rules.",
+      part: 'what',
+      text: "Every morning, Reckon works out who gets paid. It pays what it safely can, and only asks the boss when a person needs to decide. The AI never decides how much to pay anyone. That's all fixed rules.",
     },
     {
       focus: 'hero',
