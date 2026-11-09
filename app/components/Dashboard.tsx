@@ -244,13 +244,13 @@ export function Dashboard({ initialRun, info: initialInfo }: { initialRun: RunVi
             <Recon run={run} />
             <Signals run={run} />
           </div>
-          {run.claude && <CustomEmail busy={busy} onSend={(m) => act({ type: 'custom_email', ...m }, 'custom')} />}
           <Log run={run} />
         </main>
 
         <aside className="rail" aria-label="What happens next">
           {error && <div className="toast" role="alert">{error}</div>}
           <Steps run={run} busy={busy} onAct={act} />
+          {run.claude && <CustomEmail busy={busy} onSend={(m) => act({ type: 'custom_email', ...m }, 'custom')} />}
           <Proof run={run} busy={busy} onReplay={(id, tamper) => act({ type: 'replay', decisionId: id, tamper }, `replay-${id}-${tamper}`)} />
           {!info.persistent && <div className="note">Runs are kept in server memory here, so they reset when the server restarts. Add Supabase to keep them.</div>}
         </aside>
@@ -788,11 +788,12 @@ function CustomEmail({ busy, onSend }: { busy: string | null; onSend: (m: { from
   const [subject, setSubject] = useState('Stage 2 invoice');
   const [body, setBody] = useState('');
   return (
-    <section aria-labelledby="custom-title">
-      <div className="section-head">
-        <h2 id="custom-title">Try your own email</h2>
-        <span className="section-note">Claude reads it into one checked fact; code decides what it means</span>
-      </div>
+    <section className="custom" data-tour="custom" aria-labelledby="custom-title">
+      <h2 id="custom-title">Write your own email to Reckon</h2>
+      <p className="muted custom-note">
+        Nothing here is scripted. Write as a customer or a supplier (a late payment, a part payment, a dispute) and watch the plan change. Claude reads it into
+        one checked fact; code decides what it means.
+      </p>
       <form
         className="form"
         onSubmit={(e) => {
@@ -806,6 +807,7 @@ function CustomEmail({ busy, onSend }: { busy: string | null; onSend: (m: { from
           className="email"
           aria-label="Email body"
           placeholder="e.g. Sorry, we can't pay the stage 2 invoice until the end of the month."
+          rows={4}
           value={body}
           onChange={(e) => setBody(e.target.value)}
           maxLength={2000}

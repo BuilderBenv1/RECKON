@@ -278,3 +278,9 @@ body.touring { padding-bottom: 170px; }
 .voice-row audio { width: min(320px, 100%); }
 
 .tourbar-link { justify-self: start; }
+
+/* ---------- write your own email ---------- */
+.custom { border: 1px solid var(--agent); border-radius: var(--radius-sm); padding: 14px 16px; background: var(--agent-soft); }
+.custom h2 { margin: 0 0 6px; font-size: 16px; }
+.custom-note { margin: 0 0 10px; font-size: 13px; line-height: 1.45; }
+.custom .field, .custom .email { width: 100%; box-sizing: border-box; }

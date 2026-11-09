@@ -72,6 +72,15 @@ describe('guided demo narration', () => {
     expect(text(script, 'after:chase')).toContain('checks with the bank first');
   });
 
+  it('ends by inviting people to write their own email, but only when Claude can read it', async () => {
+    const s = await Session.create('demo', { claude: false });
+    const v = buildView('t', s);
+    expect(outro(v).some((b) => b.focus === 'custom')).toBe(false);
+    const on = outro({ ...v, claude: true });
+    expect(on[0]).toMatchObject({ focus: 'custom' });
+    expect(on[0]!.text).toMatch(/^Nothing in this demo is scripted/);
+  });
+
   it('keeps names speakable', () => {
     expect(presenterName('Ben & Kieron')).toBe('Ben & Kieron');
     expect(presenterName('<script>x</script>')).toBe('scriptxscript');

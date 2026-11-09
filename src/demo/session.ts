@@ -78,6 +78,9 @@ export interface SessionSnapshot {
 
 /** Most Claude calls one run may make, so a public demo can't run up a bill. */
 export const CLAUDE_CALL_LIMIT = 40;
+const claudeLimit = (mode: Mode) => (mode === 'demo' ? DEMO_CLAUDE_CALL_LIMIT : CLAUDE_CALL_LIMIT);
+/** Public demo runs get fewer Claude calls: the story needs about 8, which leaves room to try a few emails. */
+export const DEMO_CLAUDE_CALL_LIMIT = 16;
 
 const EMAILS = { delay: delayEmail, split: splitEmail, chase: chaseEmail, remittance: remittanceEmail } satisfies Record<string, Email>;
 
@@ -151,7 +154,7 @@ export class Session {
     // Count Claude calls and stop at the limit, so a public demo stays cheap.
     const reader: EmailReader = deps.reader ?? {
       read: async (email, book) => {
-        if (!usesClaude || !session || session.snap.claudeCalls >= CLAUDE_CALL_LIMIT) return new FixtureReader().read(email, book);
+        if (!usesClaude || !session || session.snap.claudeCalls >= claudeLimit(session.snap.mode)) return new FixtureReader().read(email, book);
         session.snap.claudeCalls += 1;
         claudeReader ??= new ClaudeReader();
         return claudeReader.read(email, book);
@@ -171,7 +174,7 @@ export class Session {
   }
 
   get claudeOn(): boolean {
-    return this.usesClaude && this.snap.claudeCalls < CLAUDE_CALL_LIMIT;
+    return this.usesClaude && this.snap.claudeCalls < claudeLimit(this.snap.mode);
   }
 
   /** Airwallex object ids this run owns, so webhooks can find it. */
@@ -201,7 +204,7 @@ export class Session {
     for (let i = 0; i < this.reckon.outbox.length; i++) {
       if (this.snap.view.drafts[i]) continue;
       const m = this.reckon.outbox[i]!;
-      if (this.usesClaude && this.snap.claudeCalls < CLAUDE_CALL_LIMIT) this.snap.claudeCalls += 1;
+      if (this.usesClaude && this.snap.claudeCalls < claudeLimit(this.snap.mode)) this.snap.claudeCalls += 1;
       else {
         this.snap.view.drafts[i] = { by: 'template' };
         continue;

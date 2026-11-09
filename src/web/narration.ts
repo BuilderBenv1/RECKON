@@ -3,7 +3,7 @@ import type { DecisionView, RunView } from './view.js';
 // The guided demo's voice-over. Every number is read from the run as it stands, never typed in,
 // so the narrator can't say something the page doesn't show. Pure: same view in, same words out.
 
-export type Focus = 'hero' | 'brief' | 'changes' | 'decisions' | 'payments' | 'outbox' | 'recon' | 'signals' | 'steps' | 'proof';
+export type Focus = 'hero' | 'brief' | 'changes' | 'decisions' | 'payments' | 'outbox' | 'recon' | 'signals' | 'steps' | 'proof' | 'custom';
 
 export interface Beat {
   focus: Focus;
@@ -256,9 +256,13 @@ export const presenterName = (raw: string | null | undefined): string | null => 
   return n || null;
 };
 
-export function outro(_v: RunView, o: Opts = {}): Beat[] {
+export function outro(v: RunView, o: Opts = {}): Beat[] {
   const name = presenterName(o.presenter);
+  const tryIt: Beat[] = v.claude
+    ? [{ focus: 'custom', text: "Nothing in this demo is scripted, by the way. Write your own email to Reckon in the box on the right, as a customer or a supplier, and watch the plan change." }]
+    : [];
   return [
+    ...tryIt,
     {
       focus: 'hero',
       text:
