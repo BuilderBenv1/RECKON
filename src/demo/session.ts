@@ -302,7 +302,7 @@ export class Session {
         this.result(
           action.type,
           out.outcome === 'replaced'
-            ? `The original transfer came back (account closed). Reckon sent one replacement; when the supplier chased again it found that replacement ${again.outcome === 'in_flight' ? 'already on its way' : again.outcome.replace(/_/g, ' ')} and paid nothing.`
+            ? `The original transfer came back (${(out.original.failureType ?? 'cancelled').replace(/_/g, ' ').toLowerCase()}). Reckon sent one replacement; when the supplier chased again it found that replacement ${again.outcome === 'in_flight' ? 'already on its way' : again.outcome.replace(/_/g, ' ')} and paid nothing.`
             : `Checked Airwallex first: the payment is ${out.outcome.replace(/_/g, ' ')}. No new payment.`,
           [],
           [],
