@@ -84,3 +84,16 @@ describe('supabase run store', () => {
     expect(calls).toHaveLength(0);
   });
 });
+
+describe('live access codes', async () => {
+  const { liveCodeOk } = await import('../src/web/server.js');
+  it('accepts any of several comma-separated codes, and nothing else', () => {
+    expect(liveCodeOk('mine, judges-2026', 'judges-2026')).toBe(true);
+    expect(liveCodeOk('mine, judges-2026', ' mine ')).toBe(true);
+    expect(liveCodeOk('mine, judges-2026', 'judges')).toBe(false);
+    expect(liveCodeOk('mine', undefined)).toBe(false);
+    expect(liveCodeOk('mine', '')).toBe(false);
+    expect(liveCodeOk(undefined, undefined)).toBe(true);
+    expect(liveCodeOk(' , ', 'x')).toBe(true);
+  });
+});

@@ -42,11 +42,20 @@ export async function loadView(runId: string | undefined): Promise<RunView | nul
   return buildView(run.id, Session.restore(run.data, depsFor(run.mode)));
 }
 
+/**
+ * RECKON_LIVE_CODE may hold several codes separated by commas (say, your own and one for the
+ * judges), so one can be withdrawn without changing the other. Unset means no code is needed.
+ */
+export function liveCodeOk(setting: string | undefined, code: string | undefined): boolean {
+  const codes = (setting ?? '').split(',').map((c) => c.trim()).filter(Boolean);
+  if (!codes.length) return true;
+  return !!code && codes.includes(code.trim());
+}
+
 export async function createRun(mode: Mode, code?: string): Promise<RunView> {
   if (mode === 'live') {
     if (!liveConfigured()) throw new UserError('Live runs need Airwallex sandbox keys on the server.');
-    const want = process.env.RECKON_LIVE_CODE;
-    if (want && code !== want) throw new UserError('That access code is not right.');
+    if (!liveCodeOk(process.env.RECKON_LIVE_CODE, code)) throw new UserError('That access code is not right.');
   }
   const session = await Session.create(mode, depsFor(mode));
   const run = await getStore().create(mode, session.snapshot(), session.refs());
