@@ -186,7 +186,8 @@ export function Dashboard({ initialRun, info: initialInfo }: { initialRun: RunVi
   );
 
   // Live runs: while the customer link is unpaid, check it every few seconds (the webhook usually wins).
-  const waitingOnLink = run?.mode === 'live' && run.steps.find((s) => s.id === 'customer_pays')?.state === 'next' && run.links.some((l) => l.status === 'sent');
+  // The guided tour does its own payment checks; polling here too would just queue behind it.
+  const waitingOnLink = !tour && run?.mode === 'live' && run.steps.find((s) => s.id === 'customer_pays')?.state === 'next' && run.links.some((l) => l.status === 'sent');
   const polling = useRef(false);
   useEffect(() => {
     if (!waitingOnLink) return;

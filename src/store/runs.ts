@@ -35,6 +35,9 @@ export interface RunStore {
   /** Records a webhook event; false if this event id was already received. */
   recordWebhook(evt: WebhookEvent): Promise<boolean>;
   markWebhookHandled(id: string, runIds: string[]): Promise<void>;
+  /** Takes the run's lease for `ms` if nobody holds it; returns a token, or null if it's taken. */
+  lock(id: string, ms: number): Promise<string | null>;
+  unlock(id: string, token: string): Promise<void>;
 }
 
 // ---------------------------------------------------------------- memory
@@ -42,6 +45,7 @@ export interface RunStore {
 interface MemoryState {
   runs: Map<string, StoredRun>;
   events: Map<string, WebhookEvent & { handled: string[] }>;
+  leases?: Map<string, { token: string; until: number }>;
 }
 const g = globalThis as unknown as { __reckonMemory?: MemoryState };
 
@@ -85,6 +89,18 @@ export class MemoryRunStore implements RunStore {
   async markWebhookHandled(id: string, runIds: string[]) {
     const e = this.m.events.get(id);
     if (e) e.handled = runIds;
+  }
+  async lock(id: string, ms: number) {
+    const leases = (this.m.leases ??= new Map());
+    const cur = leases.get(id);
+    if (cur && cur.until > Date.now()) return null;
+    const token = crypto.randomUUID();
+    leases.set(id, { token, until: Date.now() + ms });
+    return token;
+  }
+  async unlock(id: string, token: string) {
+    const leases = (this.m.leases ??= new Map());
+    if (leases.get(id)?.token === token) leases.delete(id);
   }
 }
 
@@ -174,6 +190,25 @@ export class SupabaseRunStore implements RunStore {
 
   async markWebhookHandled(id: string, runIds: string[]) {
     await this.req('PATCH', `reckon_webhook_events?id=eq.${encodeURIComponent(id)}`, { handled_runs: runIds });
+  }
+
+  async lock(id: string, ms: number) {
+    if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
+    const token = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const free = `or=(lease_until.is.null,lease_until.lt.${encodeURIComponent(now)})`;
+    const rows = await this.req<unknown[]>(
+      'PATCH',
+      `reckon_runs?id=eq.${id}&${free}&select=id`,
+      { lease_token: token, lease_until: new Date(Date.now() + ms).toISOString() },
+      'return=representation',
+    );
+    return rows.length ? token : null;
+  }
+
+  async unlock(id: string, token: string) {
+    if (!/^[0-9a-f-]{36}$/i.test(id)) return;
+    await this.req('PATCH', `reckon_runs?id=eq.${id}&lease_token=eq.${token}`, { lease_token: null, lease_until: null }, 'return=minimal');
   }
 }
 

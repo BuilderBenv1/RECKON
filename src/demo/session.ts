@@ -1,3 +1,4 @@
+import { requestIds } from '../agent/ids.js';
 import delayEmail from '../../data/emails/01-westfield-delay.json' with { type: 'json' };
 import splitEmail from '../../data/emails/02-pennine-split-yes.json' with { type: 'json' };
 import chaseEmail from '../../data/emails/03-brightline-not-received.json' with { type: 'json' };
@@ -69,6 +70,8 @@ export interface SessionSnapshot {
   version: 1;
   mode: Mode;
   createdAt: string;
+  /** Random per run; request ids are derived from it (see agent/ids.ts). Older runs fall back to createdAt. */
+  seed?: string;
   done: StepId[];
   reckon: ReckonSnapshot;
   awx: { kind: 'fake'; s: FakeSnapshot } | { kind: 'envelope'; s: EnvelopeSnapshot };
@@ -115,16 +118,18 @@ export class Session {
     const clock = deps.clock ?? (() => new Date().toISOString());
     const awx: AwxAdapter =
       mode === 'demo' ? new FakeAirwallex({ ...seedBalances }, seedRates) : new OperatingEnvelope((deps.live ?? AirwallexRest.fromEnv)(), seedBalances);
+    const seed = crypto.randomUUID();
     const s = Session.wire(
       {
         version: 1,
         mode,
         createdAt: clock(),
+        seed,
         done: [],
         view: { recon: [], last: null, incident: null, replays: [], signals: [], drafts: {} },
         claudeCalls: 0,
       },
-      (reader) => new Reckon(initialState(structuredClone(seedBook), { ...seedBalances }, seedRates), defaultPolicy, awx, reader, clock),
+      (reader) => new Reckon(initialState(structuredClone(seedBook), { ...seedBalances }, seedRates), defaultPolicy, awx, reader, clock, requestIds(seed)),
       awx,
       deps,
     );
@@ -139,7 +144,7 @@ export class Session {
         ? FakeAirwallex.restore(snap.awx.s, seedRates)
         : OperatingEnvelope.restore((deps.live ?? AirwallexRest.fromEnv)(), snap.awx.s);
     const { reckon: r, awx: _a, ...rest } = snap;
-    return Session.wire(rest, (reader) => Reckon.restore(r, defaultPolicy, awx, reader, clock), awx, deps);
+    return Session.wire(rest, (reader) => Reckon.restore(r, defaultPolicy, awx, reader, clock, requestIds(snap.seed ?? snap.createdAt)), awx, deps);
   }
 
   private static wire(

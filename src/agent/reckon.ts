@@ -31,6 +31,8 @@ export interface ReckonSnapshot {
   log: LogEntry[];
   links: [string, string][];
   lastPlan: Plan | null;
+  /** How many times each operation key has been issued in this run (older snapshots lack it). */
+  ops?: Record<string, number>;
 }
 
 export type IncidentOutcome =
@@ -49,6 +51,7 @@ export class Reckon {
   log: LogEntry[] = [];
   links = new Map<string, string>();
   lastPlan: Plan | null = null;
+  ops: Record<string, number> = {};
 
   constructor(
     public state: CashState,
@@ -56,7 +59,7 @@ export class Reckon {
     private readonly awx: AirwallexPort,
     private readonly reader: EmailReader,
     private readonly clock: () => string,
-    private readonly newId: () => string = () => crypto.randomUUID(),
+    private readonly newId: (key: string) => string = () => crypto.randomUUID(),
   ) {}
 
   /** Everything needed to carry on later in another process (serverless requests). */
@@ -68,6 +71,7 @@ export class Reckon {
       log: this.log,
       links: [...this.links],
       lastPlan: this.lastPlan,
+      ops: this.ops,
     });
   }
 
@@ -77,7 +81,7 @@ export class Reckon {
     awx: AirwallexPort,
     reader: EmailReader,
     clock: () => string,
-    newId?: () => string,
+    newId?: (key: string) => string,
   ): Reckon {
     const c = structuredClone(s);
     const r = new Reckon(c.state, policy, awx, reader, clock, newId);
@@ -86,6 +90,7 @@ export class Reckon {
     r.log = c.log;
     r.links = new Map(c.links);
     r.lastPlan = c.lastPlan;
+    r.ops = c.ops ?? {};
     return r;
   }
 
@@ -173,7 +178,11 @@ export class Reckon {
     switch (d.kind) {
       case 'convert': {
         const quote = await this.awx.quote('USD', d.currency, d.amount);
-        await this.awx.convert({ requestId: this.newId(), quote });
+        // Same key for the same conversion, so a racing request can't convert twice.
+        const key = `convert|${d.id}`;
+        const n = this.ops[key] ?? 0;
+        this.ops[key] = n + 1;
+        await this.awx.convert({ requestId: this.newId(`${key}|${n}`), quote });
         await this.refreshBalances();
         this.note('execute', `Converted to ${fmt(d.amount, d.currency)} at ${quote.clientRate.toFixed(4)}.`);
         return;
@@ -219,7 +228,8 @@ export class Reckon {
   async pay(p: Payable, replaces?: string): Promise<TransferView> {
     const payee = payees[p.supplier];
     if (!payee) throw new Error(`No bank details for ${p.supplier}`);
-    const requestId = this.newId();
+    // Attempt n of this payable always gets the same request id; a replacement is attempt n + 1.
+    const requestId = this.newId(`pay|${p.id}|${this.ledger.attemptsFor(p.id).length}`);
     this.ledger.beginPayment(p.id, requestId, this.clock(), replaces);
     const beneficiaryId = await this.awx.ensureBeneficiary(payee);
     const reference = p.id;
