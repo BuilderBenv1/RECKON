@@ -1,6 +1,6 @@
 # Reckon: notes for Claude Code
 
-Hackathon entry for the Airwallex Agentic Banking Hackathon 2026. Submission due Fri 13 Nov 2026, 11:59pm IST (6:29pm UK).
+Hackathon entry for the Airwallex Agentic Banking Hackathon 2026. Submission due Sun 15 Nov 2026, 11:59pm PST (Mon 16 Nov, 7:59am UK); extended from 13 Nov. Demo Day 19 Nov in SF: 8 teams, remote allowed.
 Needs: working demo, video under 5 minutes, this repo with setup instructions.
 
 ## Commands
@@ -38,5 +38,6 @@ Needs: working demo, video under 5 minutes, this repo with setup instructions.
 
 - Submitted on HackerEarth 9 Nov 2026, 2:02pm (Build Phase, published). Video: https://youtu.be/ocjtQWg_QEg (4:48, replays the clean live sandbox run of 9 Nov 12:02, run 1c7d65df).
 - Deployed at https://reckon-henna.vercel.app with Supabase. A daily Vercel cron hits `/api/cron/keepalive` so the free Supabase project doesn't pause.
-- Finalists announced 15 Nov; Demo Day 19 Nov (remote optional).
-- Optional: add the Airwallex webhook; change the live access code after judging.
+- Judging is the video, the code and the write-up (Dan Kim, Airwallex, 30 Oct): judges don't run it, an offline mode is fine, the transfer simulation call is enough (webhooks not expected).
+- Demo Day 19 Nov (8 teams, remote allowed).
+- Optional: change the live access code after judging.
