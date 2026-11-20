@@ -10,7 +10,8 @@ Every decision can be replayed from its stored inputs to the identical answer.
 
 ## Try it
 
-- **Video (4:48):** https://youtu.be/ocjtQWg_QEg. It replays a live run on the real Airwallex sandbox from 9 November 2026, narrated by an AI voice, with the Airwallex receipt and account activity from that run.
+- **Demo Day video (3:01):** https://youtu.be/H_T5RQR98PU. Shown at Airwallex's Demo Day on 19 November 2026: one business, one week, with me on camera.
+- **Original video (4:48):** https://youtu.be/ocjtQWg_QEg. It replays a live run on the real Airwallex sandbox from 9 November 2026, narrated by an AI voice, with the Airwallex receipt and account activity from that run.
 - **Hosted app:** https://reckon-henna.vercel.app
 - **Review the code without keys:** `npm install`, then `npm test` and `npm run demo:offline`. Every money decision is in `src/policy/`; `test/race.test.ts` reproduces the race that once paid a bill twice in the sandbox, and fails without the fix (see [Never paying twice](#never-paying-twice)).
 
