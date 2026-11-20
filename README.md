@@ -112,6 +112,23 @@ A new sandbox starts with millions in every currency, so a real cash gap would n
 
 Use a **scoped API key** with read and write on Core Resources, Simulations, Payment Acceptance, Payouts and Transactional FX. Admin keys are disabled on new sandbox accounts.
 
+### Live sandbox verification
+
+The submitted video replays one live run on the real Airwallex sandbox: 9 November 2026, 12:02 to 12:07 UTC. These are that run's conversions and transfers. The Airwallex ID is the one the sandbox web app shows and searches by; the API id is the `id` the REST API returns.
+
+| Step | Airwallex ID | API id | Amount |
+|---|---|---|---|
+| EUR conversion | `C261109-CG3A2NL` | `f11f8f6e-c6c0-4f5f-98c0-33da5939ee4a` | 3,838.01 USD to 3,412.85 EUR at 1.124576 |
+| GBP conversion | `C261109-0DTT7WW` | `dd3242b7-1ff8-4a9d-b31a-fa6dfe5e3d1c` | 134.82 USD to 100.00 GBP at 1.348161 |
+| Transfer `PAY-109-SUB` | `P261109-RKN12ZK` | `7cf106a6-30a7-4595-93ee-03eddaf81c69` | 2,500.00 USD |
+| Transfer `PAY-114-FREIGHT` | `P261109-AJIYAFI` | `ee90e0b9-cf99-4cff-889c-51bf349b21bc` | 5,400.00 EUR plus 11.99 EUR fee |
+| Transfer `PAY-OH-SAAS` | `P261109-CH9B3JH` | `3997ec28-820d-4a56-8c81-d9a1c3ca20af` | 850.00 USD, paid once |
+| Transfer `PAY-121-COMP-A` | `P261109-4DW52A2` | | 1,600.00 GBP |
+| Transfer `PAY-109-SUB-I2`, original | `P261109-0B9W42X` | `d938a43f-e03a-4b64-affd-9b8998d40e9b` | 2,500.00 USD, failed, cancelled and refunded |
+| Transfer `PAY-109-SUB-I2`, replacement | `P261109-WKL3C7A` | `8fc5b19e-cd6c-467c-a3a5-d5ab2d8e33f2` | 2,500.00 USD |
+
+The earlier run that day (conversions at 10:02 UTC) is the one with the bug described under [Never paying twice](#never-paying-twice): the sandbox's account activity shows `PAY-OH-SAAS` paid twice, as `P261109-9JS37AB` and `P261109-3RMAG7F`.
+
 ## Hosting on Vercel
 
 1. **Supabase.** Create a free project, then run the four files in `supabase/migrations` in order in its SQL editor: runs and webhook events (0001), the public `narration` bucket for voiced lines (0002), live-run history for replays (0003) and the per-run lease (0004). Copy the project URL and the secret (service role) key from Project settings > API keys.
