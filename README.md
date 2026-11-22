@@ -25,9 +25,13 @@ Most treasury agents decide who doesn't get paid. Reckon also goes and gets mone
 
 Every decision can be replayed from its stored inputs to the identical answer.
 
-| When a fact changes, it shows only the decisions that moved | An approval covers the exact numbers shown, and nothing else |
-| :---: | :---: |
-| <img src="docs/readme/changes.png" alt="What just happened: Westfield's milestone slips, forecast confidence is now low, and six decisions changed, each listed as new, changed or dropped." width="100%"> | <img src="docs/readme/approval.png" alt="The MD's brief: one paragraph on the cash position, a held EUR 7,500 payment, and a EUR 3,412.85 conversion with an 'Approve exactly this' button." width="100%"> |
+**When a fact changes, it shows only the decisions that moved.**
+
+<img src="docs/readme/changes.png" alt="What just happened: Westfield's milestone slips, forecast confidence is now low, and six decisions changed, each listed as new, changed or dropped." width="100%">
+
+**An approval covers the exact numbers shown, and nothing else.**
+
+<img src="docs/readme/approval.png" alt="The MD's brief: one paragraph on the cash position, a held EUR 7,500 payment, and a EUR 3,412.85 conversion with an 'Approve exactly this' button." width="100%">
 
 ## For judges
 
