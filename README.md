@@ -1,19 +1,66 @@
+<div align="center">
+
+<img src="app/icon.svg" alt="" width="64" height="64">
+
 # Reckon
 
 **A finance agent for project businesses that closes a cash gap instead of just rationing it.**
 
-Built on Airwallex APIs for the Agentic Banking Hackathon 2026 (Track 1, Adaptive Treasury Controller).
+Built on Airwallex for the Agentic Banking Hackathon 2026 · Track 1, Adaptive Treasury Controller
+
+![88 tests passing](https://img.shields.io/badge/tests-88%20passing-1d7a52?style=flat-square) ![Live run on the Airwallex sandbox, 9 Nov 2026](https://img.shields.io/badge/Airwallex%20sandbox-live%20run%209%20Nov%202026-0d6b70?style=flat-square) ![MIT licence](https://img.shields.io/badge/licence-MIT-5d6b78?style=flat-square)
+
+<a href="https://reckon-henna.vercel.app"><img src="docs/readme/hero.png" alt="Reckon's morning cash brief: USD 3,229 short this week, and Reckon closes it for USD 200. Cash above reserve is USD 10,085 against USD 13,314 due in three days." width="100%"></a>
+
+**[Watch the demo (3:01)](https://youtu.be/H_T5RQR98PU)** &nbsp;·&nbsp; **[Try it live](https://reckon-henna.vercel.app)** &nbsp;·&nbsp; **[Review it without keys](#review-it-in-two-minutes)** &nbsp;·&nbsp; **[Airwallex ids from the live run](#live-sandbox-verification)**
+
+</div>
+
+> [!NOTE]
+> **Sandbox money and synthetic data only.** Live: one full run on the real Airwallex sandbox on 9 November 2026, with its ids [listed below](#live-sandbox-verification). Simulated: Airwallex in the hosted demo, and the customers and suppliers. No real business, customer or supplier appears anywhere in this repo.
+
+## What it does
 
 Most treasury agents decide who doesn't get paid. Reckon also goes and gets money. It works from the finance team's own spreadsheet. It ranks every payment by what paying it unlocks on its project, holds unbudgeted spend for the MD, and prices every way to close the gap: an early-payment discount sent as an Airwallex payment link, a split with a supplier who has agreed before, a deferral that costs nothing, FX timing. Then it does the cheapest combination, and replans when customers pay and suppliers reply.
 
 Every decision can be replayed from its stored inputs to the identical answer.
 
-## Try it
+| When a fact changes, it shows only the decisions that moved | An approval covers the exact numbers shown, and nothing else |
+| :---: | :---: |
+| <img src="docs/readme/changes.png" alt="What just happened: Westfield's milestone slips, forecast confidence is now low, and six decisions changed, each listed as new, changed or dropped." width="100%"> | <img src="docs/readme/approval.png" alt="The MD's brief: one paragraph on the cash position, a held EUR 7,500 payment, and a EUR 3,412.85 conversion with an 'Approve exactly this' button." width="100%"> |
+
+## For judges
+
+| What to check | Where to find it |
+| --- | --- |
+| **Who it's for** | The finance lead of a business that's paid in stages, such as a contractor, in a week when the cash won't cover the bills. |
+| **What it does on Airwallex** | FX conversions sized to the shortfall, local and SWIFT transfers, a payment link for early payment, beneficiaries, a simulated transfer failure and signed webhooks. Every call is in [`src/airwallex/rest.ts`](src/airwallex/rest.ts). |
+| **The controls** | A reserve floor, limits that tighten when the forecast is less certain, unbudgeted spend held for a person, and approvals tied to exact terms. The rules are in [`src/policy/plan.ts`](src/policy/plan.ts) and the approvals in [`src/ledger/ledger.ts`](src/ledger/ledger.ts). |
+| **Never paying twice** | It came from a real double payment in the sandbox. [`test/race.test.ts`](test/race.test.ts) reproduces it and fails without the fix. See [Never paying twice](#never-paying-twice). |
+| **Proof it ran live** | The conversion and transfer ids from the 9 November run, under [Live sandbox verification](#live-sandbox-verification). |
+
+## Review it in two minutes
+
+```
+npm install
+npm test               # 88 tests
+npm run demo:offline   # the whole story against an in-memory Airwallex, no keys
+```
+
+Every money decision is in `src/policy/`. The model reads emails and drafts messages; it never does the maths.
+
+## What isn't finished
+
+- **No production money.** Everything ran on the Airwallex sandbox.
+- **No customers or pilots yet.**
+- **It reads a spreadsheet.** It isn't connected to accounting software yet.
+- **One approver.** The MD approves; there is no second sign-off.
+
+## Videos and the hosted app
 
 - **Demo Day video (3:01):** https://youtu.be/H_T5RQR98PU. Shown at Airwallex's Demo Day on 19 November 2026: one business, one week, with me on camera.
 - **Original video (4:48):** https://youtu.be/ocjtQWg_QEg. It replays a live run on the real Airwallex sandbox from 9 November 2026, narrated by an AI voice, with the Airwallex receipt and account activity from that run.
 - **Hosted app:** https://reckon-henna.vercel.app
-- **Review the code without keys:** `npm install`, then `npm test` and `npm run demo:offline`. Every money decision is in `src/policy/`; `test/race.test.ts` reproduces the race that once paid a bill twice in the sandbox, and fails without the fix (see [Never paying twice](#never-paying-twice)).
 
 On the start page:
 
@@ -132,6 +179,9 @@ The earlier run that day (conversions at 10:02 UTC) is the one with the bug desc
 
 ## Hosting on Vercel
 
+<details>
+<summary>Setting up Supabase, Vercel and the Airwallex webhook</summary>
+
 1. **Supabase.** Create a free project, then run the four files in `supabase/migrations` in order in its SQL editor: runs and webhook events (0001), the public `narration` bucket for voiced lines (0002), live-run history for replays (0003) and the per-run lease (0004). Copy the project URL and the secret (service role) key from Project settings > API keys.
 2. **Vercel.** Import the GitHub repo. It's detected as Next.js; no build settings to change. Add these environment variables:
 
@@ -151,6 +201,8 @@ The earlier run that day (conversions at 10:02 UTC) is the one with the bug desc
 | `CRON_SECRET` | Optional | Locks the daily keep-alive ping to Vercel's scheduler |
 
 3. **Airwallex webhook.** In the sandbox web app, go to Developer > Webhooks and add `https://<your-app>.vercel.app/api/webhooks/airwallex` for `payment_intent.succeeded`, `payout.transfer.paid`, `payout.transfer.failed` and `payout.transfer.cancelled`. Copy its secret into `AIRWALLEX_WEBHOOK_SECRET` and redeploy. Paying the customer's link then replans the agent on its own; without the webhook, the page checks the link every few seconds instead.
+
+</details>
 
 All data is synthetic. No real business, customer or supplier appears anywhere in this repo.
 
