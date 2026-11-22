@@ -12,7 +12,7 @@ Built on Airwallex for the Agentic Banking Hackathon 2026 · Track 1, Adaptive T
 
 <a href="https://reckon-henna.vercel.app"><img src="docs/readme/hero.png" alt="Reckon's morning cash brief: USD 3,229 short this week, and Reckon closes it for USD 200. Cash above reserve is USD 10,085 against USD 13,314 due in three days." width="100%"></a>
 
-**[Watch the demo (3:01)](https://youtu.be/H_T5RQR98PU)** &nbsp;·&nbsp; **[Try it live](https://reckon-henna.vercel.app)** &nbsp;·&nbsp; **[Review it without keys](#review-it-in-two-minutes)** &nbsp;·&nbsp; **[Airwallex ids from the live run](#live-sandbox-verification)**
+**[Watch the demo (3:01)](https://youtu.be/H_T5RQR98PU)** &nbsp;·&nbsp; **[Try it live](https://reckon-henna.vercel.app)** &nbsp;·&nbsp; **[Review it without keys](#review-it-in-two-minutes)** &nbsp;·&nbsp; **[Airwallex ids from the live run](#live-sandbox-verification)** &nbsp;·&nbsp; **[Reckon in ChatGPT](#since-the-deadline-reckon-in-chatgpt)**
 
 </div>
 
@@ -59,6 +59,16 @@ Every money decision is in `src/policy/`. The model reads emails and drafts mess
 - **No customers or pilots yet.**
 - **It reads a spreadsheet.** It isn't connected to accounting software yet.
 - **One approver.** The MD approves; there is no second sign-off.
+
+## Since the deadline: Reckon in ChatGPT
+
+Built on 22 November 2026, after the hackathon deadline, in response to the Airwallex plugin for ChatGPT. It lives on its own branch, [`mcp-plugin`](https://github.com/BuilderBenv1/reckon/tree/mcp-plugin), and is not part of the submitted code on `main`.
+
+Airwallex's agent tools let an agent operate an account. This adds the other half: an agent can ask Reckon whether the business can cover the week, and why, before anything is paid. It is four read-only tools over the same planner. They can't pay, convert or send anything.
+
+<img src="docs/readme/chatgpt.png" alt="ChatGPT using Reckon. Asked for the full plan after a customer pays late, it shows USD 16,085 cash, a USD 6,000 reserve floor, USD 13,314.01 due, a USD 3,229.01 funding gap, USD 200 to close it and two approvals required. Asked to pay the freight bill, it replies that it can't execute bank payments." width="100%">
+
+Two moments from one ChatGPT conversation: the plan after a customer pays late, then a request to pay, which it refuses.
 
 ## Videos and the hosted app
 
