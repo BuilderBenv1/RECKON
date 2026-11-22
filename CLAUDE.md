@@ -11,6 +11,7 @@ Needs: working demo, video under 5 minutes, this repo with setup instructions.
 - `npm run seed:sheet`: rebuild `data/finance.xlsx` and `data/recon.json` from `src/domain/seed.ts` and `src/recon/fixture.ts`
 - `npm run demo:offline`: the full story against `FakeAirwallex`, no keys
 - `npm run sandbox:smoke`: every Airwallex call against the real sandbox (needs `.env`); 16/16 passed on 25 Oct 2026
+- `npm run mcp`: Reckon's MCP server over stdio (read-only planner tools, no keys); the app serves the same tools at `/api/mcp`
 - `npm run demo:live`: the full story against the real sandbox through `OperatingEnvelope` (needs `.env`; you pay the payment link with test card 4035501000000008)
 
 ## Rules
@@ -21,6 +22,7 @@ Needs: working demo, video under 5 minutes, this repo with setup instructions.
 - **Synthetic data only.** No real client, customer or supplier names or figures anywhere in the repo, the video or the README. The origin story is "a UK project-based business", unnamed.
 - **Live runs plan from story-sized balances.** A new sandbox holds millions per currency; `src/airwallex/envelope.ts` sends every call to the real sandbox but reports an operating balance that starts at `seedBalances` and moves with each real money movement. A transfer reading FAILED or CANCELLED is dead (FAILED shows for a few seconds before auto-cancel).
 - **Live runs use the scoped key `reckon-sandbox`.** Admin keys are disabled for new accounts.
+- **MCP tools are read-only.** `src/mcp/` exposes the planner to agents (ChatGPT, Claude). It may import only pure code (`src/policy`, `src/domain`, message templates). Never add a tool that pays, converts, approves or sends; `test/mcp.test.ts` fails if `src/mcp` imports Airwallex, the ledger, the store or a model. Branch `mcp-plugin`, built 22 Nov 2026 after the deadline; keep it off `main` until judging ends unless Ben says otherwise.
 - **Never commit keys.** `.env` is gitignored; use `.env.example` for new variables.
 - Airwallex conventions from the builder guide: amounts in major units; failed transfers end CANCELLED (read `failure_type`); simulate SENT before FAILED; SWIFT costs EUR 12.85 per payout; FX quotes are single-use; no `x-api-version` on FX calls; FX conversions are REST-only; bearer token lasts 30 minutes.
 - Airwallex field names in `src/airwallex/rest.ts` were checked against the API reference (linked per method) on 23 Oct 2026. `npm run sandbox:smoke` confirms them live. Transfer `reason` is a closed list; simulated `failure_type` values include ACCOUNT_CLOSED (not BENEFICIARY_ACCOUNT_CLOSED).

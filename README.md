@@ -130,6 +130,28 @@ The submitted video replays one live run on the real Airwallex sandbox: 9 Novemb
 
 The earlier run that day (conversions at 10:02 UTC) is the one with the bug described under [Never paying twice](#never-paying-twice): the sandbox's account activity shows `PAY-OH-SAAS` paid twice, as `P261109-9JS37AB` and `P261109-3RMAG7F`.
 
+## Using Reckon from an agent (MCP)
+
+Airwallex's agent tools let an agent in ChatGPT or Claude operate an account. This branch adds the other half: an agent can ask Reckon whether the business can cover the week, and why, before anything is paid. Built on 22 November 2026, after the hackathon deadline, in response to the Airwallex plugin for ChatGPT.
+
+It is a small [Model Context Protocol](https://modelcontextprotocol.io) server over the planner, with four tools:
+
+| Tool | What it answers |
+|---|---|
+| `list_bills_and_invoices` | The books as Reckon reads them: cash, bills due, invoices owed, and the limits Reckon works within. |
+| `cash_position` | Can we cover the bills due in the next few days without going below the reserve floor? If not, how big is the gap and what does it cost to close? |
+| `get_plan` | Every decision Reckon would make, with the rule and reason behind it, and which ones need a person. |
+| `what_if` | Replan after a change, such as a customer paying late or a supplier agreeing to split, and show only the decisions that moved. |
+
+**Every tool is read-only.** They run `plan(state, policy)`, the same pure function the app uses, and report the result. None of them can pay, convert or send anything, and `test/mcp.test.ts` checks that nothing under `src/mcp` imports Airwallex, the ledger, the run store or a model. Money still moves only inside Reckon, after any approval the policy requires. The tools answer for the demo business (synthetic data), not a live run.
+
+To try it:
+
+- **Local, no keys:** `npm run mcp` starts the server over stdio. In Claude Code: `claude mcp add reckon -- npm run --silent --prefix /path/to/reckon mcp`.
+- **Remote:** the app serves the same tools at `/api/mcp` (streamable HTTP, no authentication). Add that URL as a custom MCP server in ChatGPT or as a custom connector in Claude.
+
+Ask it "can we cover this week if Westfield pays a week late?" and it answers from the planner: USD 3,229.01 short, closed for USD 200, with the conversion waiting for approval.
+
 ## Hosting on Vercel
 
 1. **Supabase.** Create a free project, then run the four files in `supabase/migrations` in order in its SQL editor: runs and webhook events (0001), the public `narration` bucket for voiced lines (0002), live-run history for replays (0003) and the per-run lease (0004). Copy the project URL and the secret (service role) key from Project settings > API keys.
